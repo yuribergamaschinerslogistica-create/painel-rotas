@@ -44,6 +44,7 @@ def salvar_historico_nuvem(df_novo):
         try:
             df_atual = carregar_historico_nuvem()
             if df_atual is not None:
+                # Atualiza as AWBs existentes com o estado mais recente do novo ficheiro e adiciona as novas
                 df_combinado = pd.concat([df_atual, df_novo]).drop_duplicates(subset=['Waybill No'], keep='last')
             else:
                 df_combinado = df_novo
@@ -57,7 +58,7 @@ def salvar_historico_nuvem(df_novo):
                 contents = repo.get_contents(HISTORY_FILE_PATH)
                 repo.update_file(
                     path=HISTORY_FILE_PATH,
-                    message="Atualização e acumulação de histórico pelo supervisor",
+                    message=f"Atualização diária do painel: {datetime.now().strftime('%d/%m/%Y %H:%M')}",
                     content=file_bytes,
                     sha=contents.sha
                 )
@@ -166,11 +167,12 @@ st.markdown("---")
 
 uploaded_file = None
 if st.session_state["user_info"]["role"] == "Supervisor":
-    uploaded_file = st.file_uploader("Faça o upload do novo ficheiro (.xlsx) diário", type=["xlsx", "xls"])
+    uploaded_file = st.file_uploader("Faça o upload do ficheiro Excel (.xlsx) atualizado", type=["xlsx", "xls"])
     if uploaded_file is not None:
         df_novo = pd.read_excel(uploaded_file)
         if salvar_historico_nuvem(df_novo):
-            st.success("Ficheiro diário acumulado e sincronizado com o histórico mensal no GitHub!")
+            st.success("✅ Painel atualizado com sucesso! Os novos dados já estão visíveis.")
+            st.rerun()
 
 df = carregar_historico_nuvem()
 
