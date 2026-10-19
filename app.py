@@ -3,6 +3,8 @@ import pandas as pd
 import plotly.express as px
 import json
 import os
+import io
+from github import Github
 
 # Configuração inicial da página
 st.set_page_config(
@@ -10,6 +12,55 @@ st.set_page_config(
     page_icon="🚚",
     layout="wide"
 )
+
+# --- CONFIGURAÇÃO DO GITHUB PARA SINCRONIZAÇÃO EM TEMPO REAL ---
+REPO_NAME = "yuribergamaschinerslogistica-criar/painel-rota"
+DATA_FILE_PATH = "dados_rotas.xlsx"
+
+def get_github_repo():
+    try:
+        if "GITHUB_TOKEN" in st.secrets:
+            g = Github(st.secrets["GITHUB_TOKEN"])
+            return g.get_repo(REPO_NAME)
+    except Exception as e:
+        st.warning(f"Aviso de ligação ao GitHub: {e}")
+    return None
+
+def carregar_dados_nuvem():
+    repo = get_github_repo()
+    if repo:
+        try:
+            file_content = repo.get_contents(DATA_FILE_PATH)
+            decoded_content = file_content.decoded_content
+            return io.BytesIO(decoded_content)
+        except Exception:
+            # Ficheiro ainda não existe no repositório
+            pass
+    return None
+
+def salvar_dados_nuvem(uploaded_file):
+    repo = get_github_repo()
+    if repo:
+        try:
+            file_bytes = uploaded_file.getvalue()
+            try:
+                contents = repo.get_contents(DATA_FILE_PATH)
+                repo.update_file(
+                    path=DATA_FILE_PATH,
+                    message="Atualização automática de dados pelo supervisor",
+                    content=file_bytes,
+                    sha=contents.sha
+                )
+            except Exception:
+                repo.create_file(
+                    path=DATA_FILE_PATH,
+                    message="Primeiro envio de dados pelo supervisor",
+                    content=file_bytes
+                )
+            return True
+        except Exception as e:
+            st.error(f"Erro ao sincronizar com o GitHub: {e}")
+    return False
 
 # --- SISTEMA DE GESTÃO DE UTILIZADORES (LOGIN / SENHAS) ---
 USERS_FILE = "users.json"
@@ -97,8 +148,20 @@ if st.session_state["user_info"]["role"] == "Supervisor":
 st.title("🚚 Painel de Acompanhamento Diário - Rotas & AWBs")
 st.markdown("---")
 
-# Área de Upload
-uploaded_file = st.file_uploader("Faça o upload do ficheiro (.xlsx) extraído de manhã", type=["xlsx", "xls"])
+# Gestão de Ficheiro (Upload pelo Supervisor ou Leitura Automática da Nuvem)
+uploaded_file = None
+
+if st.session_state["user_info"]["role"] == "Supervisor":
+    uploaded_file = st.file_uploader("Faça o upload do ficheiro (.xlsx) extraído de manhã", type=["xlsx", "xls"])
+    if uploaded_file is not None:
+        if salvar_dados_nuvem(uploaded_file):
+            st.success("Ficheiro enviado e sincronizado com sucesso para todos os dispositivos!")
+
+# Se não foi feito upload agora, tenta carregar o último ficheiro sincronizado do GitHub
+if uploaded_file is None:
+    uploaded_file = carregar_dados_nuvem()
+    if uploaded_file is not None:
+        st.info("📊 A exibir os dados sincronizados mais recentes da operação.")
 
 if uploaded_file is not None:
     # Leitura dos dados
@@ -163,7 +226,6 @@ if uploaded_file is not None:
         st.markdown("---")
         st.markdown("### 🔍 Detalhar Entregas em Aberto")
         
-        # Lista de motoristas ordenados com pendências em aberto
         lista_motoristas_pendentes = sorted(df_aberto['Nome do Motorista'].unique().tolist())
         
         selected_driver = st.selectbox(
@@ -179,7 +241,6 @@ if uploaded_file is not None:
             col_d1.subheader(f"🚚 Motorista: {selected_driver}")
             col_d2.metric("Total de Entregas em Aberto", len(df_driver_pendente))
             
-            # Exibe a tabela com as entregas em aberto do motorista selecionado
             st.dataframe(
                 df_driver_pendente[['Número AWB', 'Dias em Rota', 'Última Movimentação', 'Data/Hora Último Scan', 'Cidade Destino']],
                 use_container_width=True,
@@ -222,3 +283,5 @@ if uploaded_file is not None:
         st.plotly_chart(fig2, use_container_width=True)
 
     st.markdown("---")
+else:
+    st.info("Aguardando o supervisor carregar o ficheiro Excel da operação para sincronizar os dados.")
