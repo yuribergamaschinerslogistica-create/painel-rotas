@@ -40,10 +40,35 @@ def categorizar_dias(dias):
 
 def tratar_dataframe(df_raw):
     df = df_raw.copy()
-    df['Driver Name'] = df['Driver Name'].fillna('Sem Motorista Atribuído')
-    df['Backlog time(Station)'] = df['Backlog time(Station)'].fillna(0).astype(int)
-    df['Last scan type'] = df['Last scan type'].fillna('Não informado')
-    df['Type'] = df['Type'].fillna('Outro')
+    # Limpar espaços extras nos nomes das colunas
+    df.columns = df.columns.str.strip()
+    
+    if 'Waybill No' not in df.columns:
+        # Tentar encontrar a coluna de AWB caso haja variação de escrita
+        for col in df.columns:
+            if 'waybill' in col.lower() or 'awb' in col.lower():
+                df = df.rename(columns={col: 'Waybill No'})
+                break
+
+    if 'Driver Name' in df.columns:
+        df['Driver Name'] = df['Driver Name'].fillna('Sem Motorista Atribuído')
+    else:
+        df['Driver Name'] = 'Sem Motorista Atribuído'
+
+    if 'Backlog time(Station)' in df.columns:
+        df['Backlog time(Station)'] = df['Backlog time(Station)'].fillna(0).astype(int)
+    else:
+        df['Backlog time(Station)'] = 0
+
+    if 'Last scan type' in df.columns:
+        df['Last scan type'] = df['Last scan type'].fillna('Não informado')
+    else:
+        df['Last scan type'] = 'Não informado'
+
+    if 'Type' in df.columns:
+        df['Type'] = df['Type'].fillna('Outro')
+    else:
+        df['Type'] = 'Outro'
     
     if 'Last scan time' in df.columns:
         df['Last scan time'] = pd.to_datetime(df['Last scan time'], errors='coerce')
@@ -52,19 +77,13 @@ def tratar_dataframe(df_raw):
     return df
 
 def carregar_historico():
-    # Se já estiver em cache na sessão, retorna direto
-    if "df_cached" in st.session_state and st.session_state["df_cached"] is not None:
-        return st.session_state["df_cached"]
-
     repo = get_github_repo()
     if repo:
         try:
             file_content = repo.get_contents(HISTORY_FILE_PATH)
             decoded_content = file_content.decoded_content
             df = pd.read_excel(io.BytesIO(decoded_content))
-            df_tratado = tratar_dataframe(df)
-            st.session_state["df_cached"] = df_tratado
-            return df_tratado
+            return tratar_dataframe(df)
         except Exception:
             pass
     return None
@@ -192,8 +211,7 @@ if st.session_state["user_info"]["role"] == "Supervisor":
     with col_up2:
         st.write("")
         st.write("")
-        if st.button("🔄 Forçar Limpeza / Reset"):
-            st.session_state["df_cached"] = None
+        if st.button("🔄 Atualizar / Recarregar"):
             st.rerun()
 
     if uploaded_file is not None:
@@ -201,16 +219,14 @@ if st.session_state["user_info"]["role"] == "Supervisor":
         df_novo_tratado = tratar_dataframe(df_novo)
         
         df_atual = carregar_historico()
-        if df_atual is not None:
-            # Garante que funde e atualiza as AWBs existentes com os dados novos
+        if df_atual is not None and 'Waybill No' in df_atual.columns and 'Waybill No' in df_novo_tratado.columns:
+            # Concatena e mantém o registo mais recente de cada AWB com base na nova planilha
             df_combinado = pd.concat([df_atual, df_novo_tratado]).drop_duplicates(subset=['Waybill No'], keep='last')
         else:
             df_combinado = df_novo_tratado
 
-        # Força a atualização imediata da sessão para refletir os dados novos na hora
-        st.session_state["df_cached"] = df_combinado
         sincronizar_github(df_combinado)
-        st.success("⚡ Dados atualizados e aplicados com sucesso!")
+        st.success("⚡ Planilha nova integrada e guardada com sucesso!")
         time.sleep(0.5)
         st.rerun()
 
@@ -348,7 +364,7 @@ if df is not None:
                 text='AWBs em Aberto',
                 title="Quantidade de AWBs 'Em Aberto' por Motorista",
                 color='AWBs em Aberto',
-                color_continuous_scale='Reds'
+                    color_continuous_scale='Reds'
             )
             fig0.update_layout(xaxis_tickangle=-45)
             st.plotly_chart(fig0, use_container_width=True)
@@ -362,7 +378,7 @@ if df is not None:
                 index=0 if len(lista_motoristas_pendentes) > 0 else None
             )
             if selected_driver:
-                df_driver_pendente = df_aberto[df_aberto['Nome do Motorista'] == selected_driver]
+                df_driver_pendente = df_aberto[df_aberto['Nome/Motorista'] == selected_driver] if 'Nome/Motorista' in df_aberto.columns else df_aberto[df_aberto['Nome do Motorista'] == selected_driver]
                 col_d1, col_d2 = st.columns(2)
                 col_d1.subheader(f"🚚 Motorista: {selected_driver}")
                 col_d2.metric("Total de Entregas em Aberto", len(df_driver_pendente))
