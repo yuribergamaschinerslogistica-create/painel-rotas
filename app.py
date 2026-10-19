@@ -42,15 +42,12 @@ def salvar_historico_nuvem(df_novo):
     repo = get_github_repo()
     if repo:
         try:
-            # Tenta carregar histórico existente para acumular
             df_atual = carregar_historico_nuvem()
             if df_atual is not None:
-                # Junta o histórico antigo com o novo e remove duplicados baseados no número da AWB mantendo o mais recente
                 df_combinado = pd.concat([df_atual, df_novo]).drop_duplicates(subset=['Waybill No'], keep='last')
             else:
                 df_combinado = df_novo
 
-            # Converte para bytes para enviar ao GitHub
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
                 df_combinado.to_excel(writer, index=False)
@@ -131,7 +128,6 @@ if st.sidebar.button("🚪 Sair / Logout"):
 
 st.sidebar.markdown("---")
 
-# Gestão de Utilizadores
 if st.session_state["user_info"]["role"] == "Supervisor":
     with st.sidebar.expander("➕ Cadastrar Novo Utilizador"):
         with st.form("new_user_form"):
@@ -159,11 +155,9 @@ if st.session_state["user_info"]["role"] == "Supervisor":
         if salvar_historico_nuvem(df_novo):
             st.success("Ficheiro diário acumulado e sincronizado com o histórico mensal no GitHub!")
 
-# Carrega o histórico acumulado da nuvem
 df = carregar_historico_nuvem()
 
 if df is not None:
-    # Tratamento dos dados
     df['Driver Name'] = df['Driver Name'].fillna('Sem Motorista Atribuído')
     df['Backlog time(Station)'] = df['Backlog time(Station)'].fillna(0).astype(int)
     df['Last scan type'] = df['Last scan type'].fillna('Não informado')
@@ -215,6 +209,32 @@ if df is not None:
     
     st.markdown("---")
 
+    # --- NOVA SECÇÃO: LISTAGEM DIRETA DE AWBS CRÍTICAS ---
+    df_criticas = df_display[df_display['Dias em Rota'] > 3]
+    
+    with st.expander(f"🚨 Ver Listagem Completa de AWBs Críticas ({len(df_criticas)} itens com mais de 3 dias em rota)"):
+        if len(df_criticas) > 0:
+            st.markdown("Aqui pode consultar diretamente todas as AWBs consideradas críticas, juntamente com o motorista responsável e a cidade destino:")
+            
+            # Campo para pesquisar uma AWB específica na tabela crítica
+            pesquisa_awb = st.text_input("🔍 Pesquisar número da AWB ou Motorista na lista crítica:")
+            df_filtrada_criticas = df_criticas
+            if pesquisa_awb:
+                df_filtrada_criticas = df_criticas[
+                    df_criticas['Número AWB'].astype(str).str.contains(pesquisa_awb, case=False, na=False) |
+                    df_criticas['Nome do Motorista'].str.contains(pesquisa_awb, case=False, na=False)
+                ]
+            
+            st.dataframe(
+                df_filtrada_criticas[['Número AWB', 'Nome do Motorista', 'Dias em Rota', 'Cidade Destino', 'Última Movimentação', 'Data/Hora Último Scan']],
+                use_container_width=True,
+                hide_index=True
+            )
+        else:
+            st.success("Parabéns! Não existem AWBs críticas (>3 dias em rota) no período selecionado.")
+
+    st.markdown("---")
+
     # --- SEÇÃO DE GRÁFICOS E DETALHAMENTO ---
     st.subheader("📊 Análise Visual & Detalhamento por Motorista")
     
@@ -248,51 +268,4 @@ if df is not None:
         lista_motoristas_pendentes = sorted(df_aberto['Nome do Motorista'].unique().tolist())
         selected_driver = st.selectbox(
             "Selecione o motorista para visualizar todas as suas entregas em aberto:",
-            options=lista_motoristas_pendentes,
-            index=0 if len(lista_motoristas_pendentes) > 0 else None
-        )
-        if selected_driver:
-            df_driver_pendente = df_aberto[df_aberto['Nome do Motorista'] == selected_driver]
-            col_d1, col_d2 = st.columns(2)
-            col_d1.subheader(f"🚚 Motorista: {selected_driver}")
-            col_d2.metric("Total de Entregas em Aberto", len(df_driver_pendente))
-            st.dataframe(
-                df_driver_pendente[['Número AWB', 'Dias em Rota', 'Última Movimentação', 'Data/Hora Último Scan', 'Cidade Destino']],
-                use_container_width=True,
-                hide_index=True
-            )
-
-    with tab2:
-        awb_per_driver = df_motoristas['Nome do Motorista'].value_counts().reset_index()
-        awb_per_driver.columns = ['Nome do Motorista', 'Quantidade de AWBs']
-        fig1 = px.bar(
-            awb_per_driver, 
-            x='Nome do Motorista', 
-            y='Quantidade de AWBs',
-            text='Quantidade de AWBs',
-            title="Total Geral de AWBs por Motorista (Acumulado)",
-            color='Quantidade de AWBs',
-            color_continuous_scale='Blues'
-        )
-        fig1.update_layout(xaxis_tickangle=-45)
-        st.plotly_chart(fig1, use_container_width=True)
-        
-    with tab3:
-        days_per_driver = df_motoristas.groupby('Nome do Motorista')['Dias em Rota'].mean().reset_index()
-        days_per_driver.columns = ['Nome do Motorista', 'Média Dias em Rota']
-        days_per_driver = days_per_driver.sort_values(by='Média Dias em Rota', ascending=False)
-        fig2 = px.bar(
-            days_per_driver, 
-            x='Nome do Motorista', 
-            y='Média Dias em Rota',
-            text_auto='.1f',
-            title="Média de Dias em Rota por Motorista",
-            color='Média Dias em Rota',
-            color_continuous_scale='Oranges'
-        )
-        fig2.update_layout(xaxis_tickangle=-45)
-        st.plotly_chart(fig2, use_container_width=True)
-
-    st.markdown("---")
-else:
-    st.info("Aguardando o supervisor carregar o primeiro ficheiro Excel para iniciar o histórico mensal.")
+            options=lista_motoristas_pendentes
