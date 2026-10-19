@@ -96,6 +96,9 @@ if "view_mode" not in st.session_state:
 if "df_ativo" not in st.session_state:
     st.session_state["df_ativo"] = None
 
+if "uploader_key" not in st.session_state:
+    st.session_state["uploader_key"] = 0
+
 # --- LOGIN ---
 if not st.session_state["logged_in"]:
     st.title("🔐 Login - Painel de Rotas")
@@ -161,12 +164,19 @@ st.markdown("---")
 if st.session_state["user_info"]["role"] == "Supervisor":
     col_up1, col_up2 = st.columns([3, 1])
     with col_up1:
-        uploaded_file = st.file_uploader("Faça o upload do ficheiro Excel (.xlsx) atualizado", type=["xlsx", "xls"])
+        # Usamos uma chave dinâmica (uploader_key) para permitir limpar o componente de upload
+        uploaded_file = st.file_uploader(
+            "Faça o upload do ficheiro Excel (.xlsx) atualizado", 
+            type=["xlsx", "xls"],
+            key=f"uploader_{st.session_state['uploader_key']}"
+        )
     with col_up2:
         st.write("")
         st.write("")
         if st.button("🔄 Forçar Limpeza / Reset"):
             st.session_state["df_ativo"] = None
+            st.session_state["uploader_key"] += 1  # Incrementa a chave para limpar o uploader visualmente
+            
             repo = get_github_repo()
             if repo:
                 try:
@@ -252,7 +262,7 @@ if df is not None:
         df_filtrada_criticas = df_criticas
         if pesquisa_central:
             df_filtrada_criticas = df_criticas[
-                df_criticas['Número AWB'].astype(str).str.contains(pesquisa_central, case=False, na=False) |
+                df_filtrada_criticas['Número AWB'].astype(str).str.contains(pesquisa_central, case=False, na=False) |
                 df_filtrada_criticas['Nome do Motorista'].str.contains(pesquisa_central, case=False, na=False)
             ]
         
