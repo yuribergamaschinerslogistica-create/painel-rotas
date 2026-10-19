@@ -135,3 +135,4 @@ if st.session_state["user_info"]["role"] == "Supervisor":
             new_name = st.text_input("Nome Completo")
             new_password = st.text_input("Nova Senha", type="password")
             new_role = st.selectbox("Perfil de A
+            
