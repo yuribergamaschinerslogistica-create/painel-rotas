@@ -28,15 +28,19 @@ def get_github_repo():
         st.warning(f"Aviso de ligação ao GitHub: {e}")
     return None
 
-# Cache otimizado para evitar lentidão na rede (atualiza a cada 5 min ou após upload)
-@st.cache_data(ttl=300)
+# Carregamento rápido com cache em sessão para evitar requisições lentas repetidas
 def carregar_historico_nuvem():
+    if "df_cached" in st.session_state and st.session_state["df_cached"] is not None:
+        return st.session_state["df_cached"]
+
     repo = get_github_repo()
     if repo:
         try:
             file_content = repo.get_contents(HISTORY_FILE_PATH)
             decoded_content = file_content.decoded_content
-            return pd.read_excel(io.BytesIO(decoded_content))
+            df = pd.read_excel(io.BytesIO(decoded_content))
+            st.session_state["df_cached"] = df
+            return df
         except Exception:
             pass
     return None
@@ -45,13 +49,15 @@ def salvar_historico_nuvem(df_novo):
     repo = get_github_repo()
     if repo:
         try:
-            st.cache_data.clear()
             df_atual = carregar_historico_nuvem()
             
             if df_atual is not None:
                 df_combinado = pd.concat([df_atual, df_novo]).drop_duplicates(subset=['Waybill No'], keep='last')
             else:
                 df_combinado = df_novo
+
+            # Atualiza o cache imediatamente para o utilizador não esperar
+            st.session_state["df_cached"] = df_combinado
 
             output = io.BytesIO()
             with pd.ExcelWriter(output, engine='openpyxl') as writer:
@@ -74,8 +80,6 @@ def salvar_historico_nuvem(df_novo):
                     message=f"Criação do histórico: {timestamp_str}",
                     content=file_bytes
                 )
-            
-            st.cache_data.clear()
             return True
         except Exception as e:
             st.error(f"Erro ao sincronizar histórico com o GitHub: {e}")
@@ -178,17 +182,15 @@ if st.session_state["user_info"]["role"] == "Supervisor":
     with col_up2:
         st.write("")
         st.write("")
-        if st.button("🔄 Atualizar Dados"):
-            st.cache_data.clear()
+        if st.button("🔄 Limpar Cache / Recarregar"):
+            st.session_state["df_cached"] = None
             st.rerun()
 
     if uploaded_file is not None:
-        with st.spinner("A processar e atualizar dados..."):
-            df_novo = pd.read_excel(uploaded_file)
-            if salvar_historico_nuvem(df_novo):
-                st.success("✅ Painel atualizado instantaneamente!")
-                time.sleep(0.5)
-                st.rerun()
+        df_novo = pd.read_excel(uploaded_file)
+        if salvar_historico_nuvem(df_novo):
+            st.success("✅ Painel atualizado instantaneamente!")
+            st.rerun()
 
 df = carregar_historico_nuvem()
 
