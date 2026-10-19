@@ -1,0 +1,17 @@
+{
+    "admin": {
+        "name": "Supervisor Geral",
+        "password": "admin",
+        "role": "Supervisor"
+    },
+    "operador": {
+        "name": "Operador Padrão",
+        "password": "123",
+        "role": "Operador"
+    },
+    "yuribergamaschine": {
+        "name": "Yuri Bergamaschine",
+        "password": "172550",
+        "role": "Supervisor"
+    }
+}
