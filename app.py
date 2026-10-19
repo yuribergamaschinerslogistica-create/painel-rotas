@@ -8,14 +8,12 @@ import time
 from github import Github
 from datetime import datetime
 
-# Configuração inicial da página
 st.set_page_config(
     page_title="Painel de Acompanhamento Diário",
     page_icon="🚚",
     layout="wide"
 )
 
-# --- CONFIGURAÇÃO DO GITHUB PARA HISTÓRICO E SINCRONIZAÇÃO ---
 REPO_NAME = "yuribergamaschinerslogistica-create/painel-rotas"
 HISTORY_FILE_PATH = "historico_mes.xlsx"
 
@@ -53,7 +51,6 @@ def tratar_dataframe(df_raw):
     df['Faixa Aging'] = df['Backlog time(Station)'].apply(categorizar_dias)
     return df
 
-# Carregamento rápido com cache local em sessão
 def carregar_historico():
     if "df_cached" in st.session_state and st.session_state["df_cached"] is not None:
         return st.session_state["df_cached"]
@@ -86,20 +83,19 @@ def sincronizar_github(df_combinado):
                 contents = repo.get_contents(HISTORY_FILE_PATH)
                 repo.update_file(
                     path=HISTORY_FILE_PATH,
-                    message=f"Sync rápido: {timestamp_str}",
+                    message=f"Sync: {timestamp_str}",
                     content=file_bytes,
                     sha=contents.sha
                 )
             except Exception:
                 repo.create_file(
                     path=HISTORY_FILE_PATH,
-                    message=f"Criação histórico: {timestamp_str}",
+                    message=f"Criar histórico: {timestamp_str}",
                     content=file_bytes
                 )
         except Exception as e:
             st.error(f"Erro ao salvar no GitHub: {e}")
 
-# --- SISTEMA DE GESTÃO DE UTILIZADORES ---
 USERS_FILE = "users.json"
 
 def load_users():
@@ -127,7 +123,7 @@ if "logged_in" not in st.session_state:
 if "view_mode" not in st.session_state:
     st.session_state["view_mode"] = "Painel Principal"
 
-# --- TELA DE LOGIN ---
+# --- LOGIN ---
 if not st.session_state["logged_in"]:
     st.title("🔐 Login - Painel de Rotas")
     st.markdown("---")
@@ -147,7 +143,7 @@ if not st.session_state["logged_in"]:
                     st.error("Utilizador ou senha incorretos.")
     st.stop()
 
-# --- ÁREA LOGADA ---
+# --- SIDEBAR ---
 st.sidebar.title(f"👤 {st.session_state['user_info']['name']}")
 st.sidebar.caption(f"Perfil: {st.session_state['user_info']['role']}")
 
@@ -158,7 +154,6 @@ if st.sidebar.button("🚪 Sair / Logout"):
     st.rerun()
 
 st.sidebar.markdown("---")
-
 st.sidebar.subheader("📌 Navegação")
 if st.sidebar.button("📊 Ver Painel Principal"):
     st.session_state["view_mode"] = "Painel Principal"
@@ -223,4 +218,78 @@ if df is not None:
         'Backlog time(Station)': 'Dias em Rota',
         'Faixa Aging': 'Faixa D0-D3',
         'Last scan type': 'Última Movimentação',
-        'Last scan time': '
+        'Last scan time': 'Data/Hora Último Scan',
+        'Destination City': 'Cidade Destino',
+        'Type': 'Status do Registro'
+    }
+    
+    cols_existentes = [c for c in cols_map.keys() if c in df.columns]
+    df_display = df[cols_existentes].rename(columns=cols_map)
+
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("📅 Filtro por Período")
+    
+    if 'Data/Hora Último Scan' in df_display.columns and df_display['Data/Hora Último Scan'].notna().any():
+        min_date = df_display['Data/Hora Último Scan'].min().date()
+        max_date = df_display['Data/Hora Último Scan'].max().date()
+        
+        filtro_datas = st.sidebar.date_input(
+            "Selecione o intervalo de datas:",
+            value=(min_date, max_date),
+            min_value=min_date,
+            max_value=max_date
+        )
+        
+        if isinstance(filtro_datas, tuple) and len(filtro_datas) == 2:
+            start_d, end_d = filtro_datas
+            df_display = df_display[
+                (df_display['Data/Hora Último Scan'].dt.date >= start_d) & 
+                (df_display['Data/Hora Último Scan'].dt.date <= end_d)
+            ]
+
+    df_criticas = df_display[df_display['Dias em Rota'] > 3]
+
+    if st.session_state["view_mode"] == "AWBs Criticas":
+        st.subheader("🚨 Listagem Completa de AWBs Críticas (>3 Dias em Rota)")
+        st.markdown("Aqui estão centralizadas todas as encomendas críticas que ultrapassaram 3 dias em rota:")
+        
+        pesquisa_central = st.text_input("🔍 Pesquisar por número da AWB ou Motorista na lista crítica:")
+        df_filtrada_criticas = df_criticas
+        if pesquisa_central:
+            df_filtrada_criticas = df_criticas[
+                df_criticas['Número AWB'].astype(str).str.contains(pesquisa_central, case=False, na=False) |
+                df_filtrada_criticas['Nome do Motorista'].str.contains(pesquisa_central, case=False, na=False)
+            ]
+        
+        st.dataframe(
+            df_filtrada_criticas[['Número AWB', 'Nome do Motorista', 'Faixa D0-D3', 'Dias em Rota', 'Cidade Destino', 'Última Movimentação', 'Data/Hora Último Scan']],
+            use_container_width=True,
+            hide_index=True
+        )
+        
+        if st.button("⬅️ Voltar ao Painel Principal"):
+            st.session_state["view_mode"] = "Painel Principal"
+            st.rerun()
+            
+    else:
+        st.markdown("### 🔍 Pesquisa Rápida de AWB")
+        busca_global = st.text_input("Digite o número da AWB para localizar instantaneamente:", placeholder="Ex: 3320108174832")
+        
+        if busca_global:
+            df_resultado_busca = df_display[df_display['Número AWB'].astype(str).str.contains(busca_global, case=False, na=False)]
+            if len(df_resultado_busca) > 0:
+                st.success(f"Encontrado(s) {len(df_resultado_busca)} registo(s) para a AWB pesquisada:")
+                st.dataframe(
+                    df_resultado_busca[['Número AWB', 'Nome do Motorista', 'Status do Registro', 'Faixa D0-D3', 'Dias em Rota', 'Cidade Destino', 'Última Movimentação', 'Data/Hora Último Scan']],
+                    use_container_width=True,
+                    hide_index=True
+                )
+            else:
+                st.warning("Nenhuma AWB encontrada com este número no histórico.")
+            st.markdown("---")
+
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Total de AWBs (Histórico)", len(df_display))
+        col2.metric("Motoristas Ativos", df_display[df_display['Nome do Motorista'] != 'Sem Motorista Atribuído']['Nome do Motorista'].nunique())
+        col3.metric("Média de Dias em Rota", f"{df_display['Dias em Rota'].mean():.1f} dias")
+        col
