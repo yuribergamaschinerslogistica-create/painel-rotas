@@ -201,13 +201,14 @@ if st.session_state["user_info"]["role"] == "Supervisor":
         
         df_atual = carregar_historico()
         if df_atual is not None:
+            # Colocamos o df_novo por último (keep='last') para garantir que os dados novos sobrescrevem os antigos para a mesma AWB
             df_combinado = pd.concat([df_atual, df_novo_tratado]).drop_duplicates(subset=['Waybill No'], keep='last')
         else:
             df_combinado = df_novo_tratado
 
         st.session_state["df_cached"] = df_combinado
         sincronizar_github(df_combinado)
-        st.success("⚡ Dados atualizados em tempo recorde!")
+        st.success("⚡ Dados novos integrados e atualizados com sucesso!")
 
 df = carregar_historico()
 
@@ -258,7 +259,7 @@ if df is not None:
         if pesquisa_central:
             df_filtrada_criticas = df_criticas[
                 df_criticas['Número AWB'].astype(str).str.contains(pesquisa_central, case=False, na=False) |
-                df_criticas['Nome do Motorista'].str.contains(pesquisa_central, case=False, na=False)
+                df_filtrada_criticas['Nome do Motorista'].str.contains(pesquisa_central, case=False, na=False)
             ]
         
         st.dataframe(
