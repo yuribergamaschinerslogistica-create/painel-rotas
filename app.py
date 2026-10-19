@@ -166,10 +166,7 @@ if st.session_state["user_info"]["role"] == "Supervisor":
         st.write("")
         st.write("")
         if st.button("🔄 Forçar Limpeza / Reset"):
-            # Limpa de forma absoluta a sessão
-            st.session_state["df_ativo"] = "RESETADO"
-            
-            # Remove o ficheiro do GitHub para evitar recarga fantasma
+            st.session_state["df_ativo"] = None
             repo = get_github_repo()
             if repo:
                 try:
@@ -177,7 +174,6 @@ if st.session_state["user_info"]["role"] == "Supervisor":
                     repo.delete_file(HISTORY_FILE_PATH, "Reset completo", contents.sha)
                 except Exception:
                     pass
-            
             st.success("Painel limpo com sucesso!")
             time.sleep(0.5)
             st.rerun()
@@ -187,7 +183,6 @@ if st.session_state["user_info"]["role"] == "Supervisor":
         df_tratado = tratar_dataframe(df_novo)
         st.session_state["df_ativo"] = df_tratado
         
-        # Sincroniza o novo ficheiro no GitHub
         repo = get_github_repo()
         if repo:
             try:
@@ -209,21 +204,7 @@ if st.session_state["user_info"]["role"] == "Supervisor":
         time.sleep(0.5)
         st.rerun()
 
-df = None
-
-if st.session_state["df_ativo"] == "RESETADO":
-    df = None
-elif st.session_state["df_ativo"] is not None:
-    df = st.session_state["df_ativo"]
-else:
-    repo = get_github_repo()
-    if repo:
-        try:
-            file_content = repo.get_contents(HISTORY_FILE_PATH)
-            df = tratar_dataframe(pd.read_excel(io.BytesIO(file_content.decoded_content)))
-            st.session_state["df_ativo"] = df
-        except Exception:
-            df = None
+df = st.session_state["df_ativo"]
 
 if df is not None:
     cols_map = {
