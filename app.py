@@ -58,8 +58,20 @@ USERS_FILE = "users.json"
 def load_users():
     if not os.path.exists(USERS_FILE):
         default_users = {
-            "admin": {"name": "Supervisor Geral", "password": "admin", "role": "Supervisor"},
-            "operador": {"name": "Operador Padrão", "password": "123", "role": "Operador"}
+            "admin": {
+                "name": "Supervisor Geral", 
+                "password": "admin", 
+                "role": "Supervisor",
+                "email": "admin@logistica.com",
+                "phone": "000000000"
+            },
+            "operador": {
+                "name": "Operador Padrão", 
+                "password": "123", 
+                "role": "Operador",
+                "email": "operador@logistica.com",
+                "phone": "111111111"
+            }
         }
         with open(USERS_FILE, "w", encoding="utf-8") as f:
             json.dump(default_users, f, indent=4, ensure_ascii=False)
@@ -80,24 +92,61 @@ if "logged_in" not in st.session_state:
 if "view_mode" not in st.session_state:
     st.session_state["view_mode"] = "Painel Principal"
 
-# --- LOGIN ---
+if "auth_mode" not in st.session_state:
+    st.session_state["auth_mode"] = "login"  # "login" ou "recuperar"
+
+# --- TELA DE LOGIN / RECUPERAÇÃO ---
 if not st.session_state["logged_in"]:
-    st.title("🔐 Login - Painel de Rotas")
+    st.title("🔐 Acesso - Painel de Rotas")
     st.markdown("---")
     col_a, col_b, col_c = st.columns([1, 2, 1])
+    
     with col_b:
-        with st.form("login_form"):
-            username_input = st.text_input("Utilizador / Login")
-            password_input = st.text_input("Senha", type="password")
-            submit_button = st.form_submit_button("Entrar")
-            if submit_button:
-                if username_input in users_db and users_db[username_input]["password"] == password_input:
-                    st.session_state["logged_in"] = True
-                    st.session_state["user_info"] = users_db[username_input]
-                    st.success(f"Bem-vindo(a), {users_db[username_input]['name']}!")
-                    st.rerun()
-                else:
-                    st.error("Utilizador ou senha incorretos.")
+        if st.session_state["auth_mode"] == "login":
+            with st.form("login_form"):
+                st.subheader("Iniciar Sessão")
+                username_input = st.text_input("Utilizador / Login")
+                password_input = st.text_input("Senha", type="password")
+                submit_button = st.form_submit_button("Entrar")
+                
+                if submit_button:
+                    if username_input in users_db and users_db[username_input]["password"] == password_input:
+                        st.session_state["logged_in"] = True
+                        st.session_state["user_info"] = users_db[username_input]
+                        st.success(f"Bem-vindo(a), {users_db[username_input]['name']}!")
+                        st.rerun()
+                    else:
+                        st.error("Utilizador ou senha incorretos.")
+            
+            if st.button("🔄 Esqueci a minha senha / Recuperar Acesso"):
+                st.session_state["auth_mode"] = "recuperar"
+                st.rerun()
+
+        elif st.session_state["auth_mode"] == "recuperar":
+            with st.form("recovery_form"):
+                st.subheader("🔑 Recuperação de Senha")
+                rec_username = st.text_input("Digite o seu Utilizador / Login")
+                rec_email = st.text_input("Digite o seu Email cadastrado")
+                rec_nova_senha = st.text_input("Defina uma Nova Senha", type="password")
+                submit_rec = st.form_submit_button("Redefinir Senha")
+                
+                if submit_rec:
+                    if rec_username in users_db:
+                        if users_db[rec_username].get("email") == rec_email:
+                            users_db[rec_username]["password"] = rec_nova_senha
+                            save_users(users_db)
+                            st.success("Senha redefinida com sucesso! Faça login com a nova senha.")
+                            st.session_state["auth_mode"] = "login"
+                            st.rerun()
+                        else:
+                            st.error("O email informado não confere com o registo deste utilizador.")
+                    else:
+                        st.error("Utilizador não encontrado.")
+            
+            if st.button("⬅️ Voltar ao Login"):
+                st.session_state["auth_mode"] = "login"
+                st.rerun()
+                
     st.stop()
 
 # --- SIDEBAR ---
@@ -125,18 +174,27 @@ st.sidebar.markdown("---")
 if st.session_state["user_info"]["role"] == "Supervisor":
     with st.sidebar.expander("➕ Cadastrar Novo Utilizador"):
         with st.form("new_user_form"):
-            new_username = st.text_input("Novo Login")
+            new_username = st.text_input("Login (Utilizador)")
             new_name = st.text_input("Nome Completo")
-            new_password = st.text_input("Nova Senha", type="password")
+            new_email = st.text_input("Email")
+            new_phone = st.text_input("Telefone")
+            new_password = st.text_input("Senha Inicial", type="password")
             new_role = st.selectbox("Perfil de Acesso", ["Operador", "Supervisor"])
             create_btn = st.form_submit_button("Guardar Utilizador")
+            
             if create_btn:
-                if new_username and new_password and new_name:
-                    users_db[new_username] = {"name": new_name, "password": new_password, "role": new_role}
+                if new_username and new_password and new_name and new_email:
+                    users_db[new_username] = {
+                        "name": new_name, 
+                        "password": new_password, 
+                        "role": new_role,
+                        "email": new_email,
+                        "phone": new_phone
+                    }
                     save_users(users_db)
                     st.success(f"Utilizador '{new_username}' cadastrado com sucesso!")
                 else:
-                    st.warning("Preencha todos os campos.")
+                    st.warning("Preencha os campos obrigatórios (Login, Nome, Email e Senha).")
 
 st.title("🚚 Painel de Acompanhamento Diário - Rotas & AWBs")
 st.markdown("---")
@@ -214,7 +272,7 @@ if df is not None:
         df_filtrada_criticas = df_criticas
         if pesquisa_central:
             df_filtrada_criticas = df_criticas[
-                df_criticas['Número AWB'].astype(str).str.contains(pesquisa_central, case=False, na=False) |
+                df_filtrada_criticas['Número AWB'].astype(str).str.contains(pesquisa_central, case=False, na=False) |
                 df_filtrada_criticas['Nome do Motorista'].str.contains(pesquisa_central, case=False, na=False)
             ]
         
