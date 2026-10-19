@@ -99,6 +99,9 @@ if "df_ativo" not in st.session_state:
 if "uploader_key" not in st.session_state:
     st.session_state["uploader_key"] = 0
 
+if "reset_efetuado" not in st.session_state:
+    st.session_state["reset_efetuado"] = False
+
 # --- LOGIN ---
 if not st.session_state["logged_in"]:
     st.title("🔐 Login - Painel de Rotas")
@@ -127,6 +130,7 @@ if st.sidebar.button("🚪 Sair / Logout"):
     st.session_state["logged_in"] = False
     st.session_state["user_info"] = None
     st.session_state["df_ativo"] = None
+    st.session_state["reset_efetuado"] = False
     st.session_state["view_mode"] = "Painel Principal"
     st.rerun()
 
@@ -164,7 +168,6 @@ st.markdown("---")
 if st.session_state["user_info"]["role"] == "Supervisor":
     col_up1, col_up2 = st.columns([3, 1])
     with col_up1:
-        # Usamos uma chave dinâmica (uploader_key) para permitir limpar o componente de upload
         uploaded_file = st.file_uploader(
             "Faça o upload do ficheiro Excel (.xlsx) atualizado", 
             type=["xlsx", "xls"],
@@ -175,13 +178,14 @@ if st.session_state["user_info"]["role"] == "Supervisor":
         st.write("")
         if st.button("🔄 Forçar Limpeza / Reset"):
             st.session_state["df_ativo"] = None
-            st.session_state["uploader_key"] += 1  # Incrementa a chave para limpar o uploader visualmente
+            st.session_state["reset_efetuado"] = True  # Bloqueia a busca automática antiga
+            st.session_state["uploader_key"] += 1      # Reseta visualmente o uploader
             
             repo = get_github_repo()
             if repo:
                 try:
                     contents = repo.get_contents(HISTORY_FILE_PATH)
-                    repo.delete_file(HISTORY_FILE_PATH, "Reset completo", contents.sha)
+                    repo.delete_file(HISTORY_FILE_PATH, "Reset total e limpeza", contents.sha)
                 except Exception:
                     pass
             st.success("Painel limpo com sucesso!")
@@ -192,6 +196,7 @@ if st.session_state["user_info"]["role"] == "Supervisor":
         df_novo = pd.read_excel(uploaded_file)
         df_tratado = tratar_dataframe(df_novo)
         st.session_state["df_ativo"] = df_tratado
+        st.session_state["reset_efetuado"] = False  # Libera para aceitar novos dados normais
         
         repo = get_github_repo()
         if repo:
@@ -215,6 +220,17 @@ if st.session_state["user_info"]["role"] == "Supervisor":
         st.rerun()
 
 df = st.session_state["df_ativo"]
+
+# Só tenta buscar do GitHub se NÃO houver dados na sessão E se o utilizador NÃO tiver acabado de clicar em Reset
+if df is None and not st.session_state["reset_efetuado"]:
+    repo = get_github_repo()
+    if repo:
+        try:
+            file_content = repo.get_contents(HISTORY_FILE_PATH)
+            df = tratar_dataframe(pd.read_excel(io.BytesIO(file_content.decoded_content)))
+            st.session_state["df_ativo"] = df
+        except Exception:
+            df = None
 
 if df is not None:
     cols_map = {
@@ -262,7 +278,7 @@ if df is not None:
         df_filtrada_criticas = df_criticas
         if pesquisa_central:
             df_filtrada_criticas = df_criticas[
-                df_filtrada_criticas['Número AWB'].astype(str).str.contains(pesquisa_central, case=False, na=False) |
+                df_criticas['Número AWB'].astype(str).str.contains(pesquisa_central, case=False, na=False) |
                 df_filtrada_criticas['Nome do Motorista'].str.contains(pesquisa_central, case=False, na=False)
             ]
         
