@@ -52,6 +52,7 @@ def tratar_dataframe(df_raw):
     return df
 
 def carregar_historico():
+    # Se já estiver em cache na sessão, retorna direto
     if "df_cached" in st.session_state and st.session_state["df_cached"] is not None:
         return st.session_state["df_cached"]
 
@@ -191,7 +192,7 @@ if st.session_state["user_info"]["role"] == "Supervisor":
     with col_up2:
         st.write("")
         st.write("")
-        if st.button("🔄 Recarregar Nuvem"):
+        if st.button("🔄 Forçar Limpeza / Reset"):
             st.session_state["df_cached"] = None
             st.rerun()
 
@@ -201,14 +202,17 @@ if st.session_state["user_info"]["role"] == "Supervisor":
         
         df_atual = carregar_historico()
         if df_atual is not None:
-            # Colocamos o df_novo por último (keep='last') para garantir que os dados novos sobrescrevem os antigos para a mesma AWB
+            # Garante que funde e atualiza as AWBs existentes com os dados novos
             df_combinado = pd.concat([df_atual, df_novo_tratado]).drop_duplicates(subset=['Waybill No'], keep='last')
         else:
             df_combinado = df_novo_tratado
 
+        # Força a atualização imediata da sessão para refletir os dados novos na hora
         st.session_state["df_cached"] = df_combinado
         sincronizar_github(df_combinado)
-        st.success("⚡ Dados novos integrados e atualizados com sucesso!")
+        st.success("⚡ Dados atualizados e aplicados com sucesso!")
+        time.sleep(0.5)
+        st.rerun()
 
 df = carregar_historico()
 
