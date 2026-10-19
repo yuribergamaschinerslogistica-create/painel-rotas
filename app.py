@@ -14,7 +14,7 @@ st.set_page_config(
 )
 
 # --- CONFIGURAÇÃO DO GITHUB PARA SINCRONIZAÇÃO EM TEMPO REAL ---
-REPO_NAME = "yuribergamaschinerslogistica-criar/painel-rota"
+REPO_NAME = "yuribergamaschinerslogistica-create/painel-rotas"
 DATA_FILE_PATH = "dados_rotas.xlsx"
 
 def get_github_repo():
