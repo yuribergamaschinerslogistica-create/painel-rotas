@@ -5,7 +5,6 @@ import json
 import os
 import io
 import time
-from github import Github
 from datetime import datetime
 
 st.set_page_config(
@@ -13,18 +12,6 @@ st.set_page_config(
     page_icon="🚚",
     layout="wide"
 )
-
-REPO_NAME = "yuribergamaschinerslogistica-create/painel-rotas"
-HISTORY_FILE_PATH = "historico_mes.xlsx"
-
-def get_github_repo():
-    try:
-        if "GITHUB_TOKEN" in st.secrets:
-            g = Github(st.secrets["GITHUB_TOKEN"])
-            return g.get_repo(REPO_NAME)
-    except Exception as e:
-        pass
-    return None
 
 def categorizar_dias(dias):
     if dias == 0:
@@ -99,9 +86,6 @@ if "df_ativo" not in st.session_state:
 if "uploader_key" not in st.session_state:
     st.session_state["uploader_key"] = 0
 
-if "reset_efetuado" not in st.session_state:
-    st.session_state["reset_efetuado"] = False
-
 # --- LOGIN ---
 if not st.session_state["logged_in"]:
     st.title("🔐 Login - Painel de Rotas")
@@ -130,7 +114,6 @@ if st.sidebar.button("🚪 Sair / Logout"):
     st.session_state["logged_in"] = False
     st.session_state["user_info"] = None
     st.session_state["df_ativo"] = None
-    st.session_state["reset_efetuado"] = False
     st.session_state["view_mode"] = "Painel Principal"
     st.rerun()
 
@@ -178,59 +161,19 @@ if st.session_state["user_info"]["role"] == "Supervisor":
         st.write("")
         if st.button("🔄 Forçar Limpeza / Reset"):
             st.session_state["df_ativo"] = None
-            st.session_state["reset_efetuado"] = True  # Bloqueia a busca automática antiga
-            st.session_state["uploader_key"] += 1      # Reseta visualmente o uploader
-            
-            repo = get_github_repo()
-            if repo:
-                try:
-                    contents = repo.get_contents(HISTORY_FILE_PATH)
-                    repo.delete_file(HISTORY_FILE_PATH, "Reset total e limpeza", contents.sha)
-                except Exception:
-                    pass
+            st.session_state["uploader_key"] += 1  # Reseta visualmente o uploader
             st.success("Painel limpo com sucesso!")
-            time.sleep(0.5)
+            time.sleep(0.3)
             st.rerun()
 
     if uploaded_file is not None:
         df_novo = pd.read_excel(uploaded_file)
-        df_tratado = tratar_dataframe(df_novo)
-        st.session_state["df_ativo"] = df_tratado
-        st.session_state["reset_efetuado"] = False  # Libera para aceitar novos dados normais
-        
-        repo = get_github_repo()
-        if repo:
-            try:
-                output = io.BytesIO()
-                with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                    df_tratado.to_excel(writer, index=False)
-                file_bytes = output.getvalue()
-                timestamp_str = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
-                
-                try:
-                    contents = repo.get_contents(HISTORY_FILE_PATH)
-                    repo.update_file(HISTORY_FILE_PATH, f"Upload: {timestamp_str}", file_bytes, contents.sha)
-                except Exception:
-                    repo.create_file(HISTORY_FILE_PATH, f"Criar histórico: {timestamp_str}", file_bytes)
-            except Exception:
-                pass
-                
+        st.session_state["df_ativo"] = tratar_dataframe(df_novo)
         st.success("⚡ Planilha carregada e aplicada instantaneamente no painel!")
-        time.sleep(0.5)
+        time.sleep(0.3)
         st.rerun()
 
 df = st.session_state["df_ativo"]
-
-# Só tenta buscar do GitHub se NÃO houver dados na sessão E se o utilizador NÃO tiver acabado de clicar em Reset
-if df is None and not st.session_state["reset_efetuado"]:
-    repo = get_github_repo()
-    if repo:
-        try:
-            file_content = repo.get_contents(HISTORY_FILE_PATH)
-            df = tratar_dataframe(pd.read_excel(io.BytesIO(file_content.decoded_content)))
-            st.session_state["df_ativo"] = df
-        except Exception:
-            df = None
 
 if df is not None:
     cols_map = {
@@ -278,7 +221,7 @@ if df is not None:
         df_filtrada_criticas = df_criticas
         if pesquisa_central:
             df_filtrada_criticas = df_criticas[
-                df_criticas['Número AWB'].astype(str).str.contains(pesquisa_central, case=False, na=False) |
+                df_filtrada_criticas['Número AWB'].astype(str).str.contains(pesquisa_central, case=False, na=False) |
                 df_filtrada_criticas['Nome do Motorista'].str.contains(pesquisa_central, case=False, na=False)
             ]
         
@@ -361,77 +304,4 @@ if df is not None:
                 awb_aberto_per_driver, 
                 x='Nome do Motorista', 
                 y='AWBs em Aberto',
-                text='AWBs em Aberto',
-                title="Quantidade de AWBs 'Em Aberto' por Motorista",
-                color='AWBs em Aberto',
-                color_continuous_scale='Reds'
-            )
-            fig0.update_layout(xaxis_tickangle=-45)
-            st.plotly_chart(fig0, use_container_width=True)
-            
-            st.markdown("---")
-            st.markdown("### 🔍 Detalhar Entregas em Aberto")
-            lista_motoristas_pendentes = sorted(df_aberto['Nome do Motorista'].unique().tolist())
-            selected_driver = st.selectbox(
-                "Selecione o motorista para visualizar todas as suas entregas em aberto:",
-                options=lista_motoristas_pendentes,
-                index=0 if len(lista_motoristas_pendentes) > 0 else None
-            )
-            if selected_driver:
-                df_driver_pendente = df_aberto[df_aberto['Nome do Motorista'] == selected_driver]
-                col_d1, col_d2 = st.columns(2)
-                col_d1.subheader(f"🚚 Motorista: {selected_driver}")
-                col_d2.metric("Total de Entregas em Aberto", len(df_driver_pendente))
-                st.dataframe(
-                    df_driver_pendente[['Número AWB', 'Faixa D0-D3', 'Dias em Rota', 'Última Movimentação', 'Data/Hora Último Scan', 'Cidade Destino']],
-                    use_container_width=True,
-                    hide_index=True
-                )
-
-        with tab2:
-            awb_per_driver = df_motoristas['Nome do Motorista'].value_counts().reset_index()
-            awb_per_driver.columns = ['Nome do Motorista', 'Quantidade de AWBs']
-            fig1 = px.bar(
-                awb_per_driver, 
-                x='Nome do Motorista', 
-                y='Quantidade de AWBs',
-                text='Quantidade de AWBs',
-                title="Total Geral de AWBs por Motorista (Acumulado)",
-                color='Quantidade de AWBs',
-                color_continuous_scale='Blues'
-            )
-            fig1.update_layout(xaxis_tickangle=-45)
-            st.plotly_chart(fig1, use_container_width=True)
-            
-        with tab3:
-            days_per_driver = df_motoristas.groupby('Nome do Motorista')['Dias em Rota'].mean().reset_index()
-            days_per_driver.columns = ['Nome do Motorista', 'Média Dias em Rota']
-            days_per_driver = days_per_driver.sort_values(by='Média Dias em Rota', ascending=False)
-            fig2 = px.bar(
-                days_per_driver, 
-                x='Nome do Motorista', 
-                y='Média Dias em Rota',
-                text_auto='.1f',
-                title="Média de Dias em Rota por Motorista",
-                color='Média Dias em Rota',
-                color_continuous_scale='Oranges'
-            )
-            fig2.update_layout(xaxis_tickangle=-45)
-            st.plotly_chart(fig2, use_container_width=True)
-
-        with tab4:
-            df_aging_driver = df_motoristas.groupby(['Nome do Motorista', 'Faixa D0-D3']).size().reset_index(name='Quantidade')
-            fig3 = px.bar(
-                df_aging_driver,
-                x='Nome do Motorista',
-                y='Quantidade',
-                color='Faixa D0-D3',
-                title="Distribuição de Aging (D0, D1, D2, D3, >D3) por Motorista",
-                category_orders={'Faixa D0-D3': ['D0', 'D1', 'D2', 'D3', '> D3']}
-            )
-            fig3.update_layout(xaxis_tickangle=-45)
-            st.plotly_chart(fig3, use_container_width=True)
-
-    st.markdown("---")
-else:
-    st.info("Aguardando o supervisor carregar o ficheiro Excel (.xlsx) atualizado para iniciar o painel.")
+                text='AWBs em
