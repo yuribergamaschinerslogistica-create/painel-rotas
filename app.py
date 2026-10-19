@@ -218,7 +218,7 @@ if df is not None:
     cols_map = {
         'Waybill No': 'Número AWB',
         'Driver Name': 'Nome do Motorista',
-        'Backlog time(Station)']: 'Dias em Rota',
+        'Backlog time(Station)': 'Dias em Rota',
         'Faixa Aging': 'Faixa D0-D3',
         'Last scan type': 'Última Movimentação',
         'Last scan time': 'Data/Hora Último Scan',
