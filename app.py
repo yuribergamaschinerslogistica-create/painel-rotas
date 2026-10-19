@@ -5,6 +5,7 @@ import json
 import os
 import io
 from github import Github
+from datetime import datetime
 
 # Configuração inicial da página
 st.set_page_config(
@@ -13,9 +14,9 @@ st.set_page_config(
     layout="wide"
 )
 
-# --- CONFIGURAÇÃO DO GITHUB PARA SINCRONIZAÇÃO EM TEMPO REAL ---
+# --- CONFIGURAÇÃO DO GITHUB PARA HISTÓRICO E SINCRONIZAÇÃO ---
 REPO_NAME = "yuribergamaschinerslogistica-create/painel-rotas"
-DATA_FILE_PATH = "dados_rotas.xlsx"
+HISTORY_FILE_PATH = "historico_mes.xlsx"
 
 def get_github_repo():
     try:
@@ -26,43 +27,55 @@ def get_github_repo():
         st.warning(f"Aviso de ligação ao GitHub: {e}")
     return None
 
-def carregar_dados_nuvem():
+def carregar_historico_nuvem():
     repo = get_github_repo()
     if repo:
         try:
-            file_content = repo.get_contents(DATA_FILE_PATH)
+            file_content = repo.get_contents(HISTORY_FILE_PATH)
             decoded_content = file_content.decoded_content
-            return io.BytesIO(decoded_content)
+            return pd.read_excel(io.BytesIO(decoded_content))
         except Exception:
-            # Ficheiro ainda não existe no repositório
             pass
     return None
 
-def salvar_dados_nuvem(uploaded_file):
+def salvar_historico_nuvem(df_novo):
     repo = get_github_repo()
     if repo:
         try:
-            file_bytes = uploaded_file.getvalue()
+            # Tenta carregar histórico existente para acumular
+            df_atual = carregar_historico_nuvem()
+            if df_atual is not None:
+                # Junta o histórico antigo com o novo e remove duplicados baseados no número da AWB mantendo o mais recente
+                df_combinado = pd.concat([df_atual, df_novo]).drop_duplicates(subset=['Waybill No'], keep='last')
+            else:
+                df_combinado = df_novo
+
+            # Converte para bytes para enviar ao GitHub
+            output = io.BytesIO()
+            with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                df_combinado.to_excel(writer, index=False)
+            file_bytes = output.getvalue()
+
             try:
-                contents = repo.get_contents(DATA_FILE_PATH)
+                contents = repo.get_contents(HISTORY_FILE_PATH)
                 repo.update_file(
-                    path=DATA_FILE_PATH,
-                    message="Atualização automática de dados pelo supervisor",
+                    path=HISTORY_FILE_PATH,
+                    message="Atualização e acumulação de histórico pelo supervisor",
                     content=file_bytes,
                     sha=contents.sha
                 )
             except Exception:
                 repo.create_file(
-                    path=DATA_FILE_PATH,
-                    message="Primeiro envio de dados pelo supervisor",
+                    path=HISTORY_FILE_PATH,
+                    message="Criação inicial do histórico mensal",
                     content=file_bytes
                 )
             return True
         except Exception as e:
-            st.error(f"Erro ao sincronizar com o GitHub: {e}")
+            st.error(f"Erro ao sincronizar histórico com o GitHub: {e}")
     return False
 
-# --- SISTEMA DE GESTÃO DE UTILIZADORES (LOGIN / SENHAS) ---
+# --- SISTEMA DE GESTÃO DE UTILIZADORES ---
 USERS_FILE = "users.json"
 
 def load_users():
@@ -83,7 +96,6 @@ def save_users(users):
 
 users_db = load_users()
 
-# Inicialização do Estado de Sessão
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
     st.session_state["user_info"] = None
@@ -92,27 +104,23 @@ if "logged_in" not in st.session_state:
 if not st.session_state["logged_in"]:
     st.title("🔐 Login - Painel de Rotas")
     st.markdown("---")
-    
     col_a, col_b, col_c = st.columns([1, 2, 1])
     with col_b:
         with st.form("login_form"):
             username_input = st.text_input("Utilizador / Login")
             password_input = st.text_input("Senha", type="password")
             submit_button = st.form_submit_button("Entrar")
-            
             if submit_button:
                 if username_input in users_db and users_db[username_input]["password"] == password_input:
                     st.session_state["logged_in"] = True
                     st.session_state["user_info"] = users_db[username_input]
-                    st.session_state["username"] = username_input
                     st.success(f"Bem-vindo(a), {users_db[username_input]['name']}!")
                     st.rerun()
                 else:
                     st.error("Utilizador ou senha incorretos.")
     st.stop()
 
-# --- ÁREA LOGADA (PAINEL PRINCIPAL) ---
-
+# --- ÁREA LOGADA ---
 st.sidebar.title(f"👤 {st.session_state['user_info']['name']}")
 st.sidebar.caption(f"Perfil: {st.session_state['user_info']['role']}")
 
@@ -123,7 +131,7 @@ if st.sidebar.button("🚪 Sair / Logout"):
 
 st.sidebar.markdown("---")
 
-# PAINEL DO SUPERVISOR: Cadastro de Novos Utilizadores
+# Gestão de Utilizadores
 if st.session_state["user_info"]["role"] == "Supervisor":
     with st.sidebar.expander("➕ Cadastrar Novo Utilizador"):
         with st.form("new_user_form"):
@@ -132,47 +140,38 @@ if st.session_state["user_info"]["role"] == "Supervisor":
             new_password = st.text_input("Nova Senha", type="password")
             new_role = st.selectbox("Perfil de Acesso", ["Operador", "Supervisor"])
             create_btn = st.form_submit_button("Guardar Utilizador")
-            
             if create_btn:
                 if new_username and new_password and new_name:
-                    users_db[new_username] = {
-                        "name": new_name,
-                        "password": new_password,
-                        "role": new_role
-                    }
+                    users_db[new_username] = {"name": new_name, "password": new_password, "role": new_role}
                     save_users(users_db)
                     st.success(f"Utilizador '{new_username}' cadastrado com sucesso!")
                 else:
-                    st.warning("Preencha todos os campos do formulário.")
+                    st.warning("Preencha todos os campos.")
 
 st.title("🚚 Painel de Acompanhamento Diário - Rotas & AWBs")
 st.markdown("---")
 
-# Gestão de Ficheiro (Upload pelo Supervisor ou Leitura Automática da Nuvem)
 uploaded_file = None
-
 if st.session_state["user_info"]["role"] == "Supervisor":
-    uploaded_file = st.file_uploader("Faça o upload do ficheiro (.xlsx) extraído de manhã", type=["xlsx", "xls"])
+    uploaded_file = st.file_uploader("Faça o upload do novo ficheiro (.xlsx) diário", type=["xlsx", "xls"])
     if uploaded_file is not None:
-        if salvar_dados_nuvem(uploaded_file):
-            st.success("Ficheiro enviado e sincronizado com sucesso para todos os dispositivos!")
+        df_novo = pd.read_excel(uploaded_file)
+        if salvar_historico_nuvem(df_novo):
+            st.success("Ficheiro diário acumulado e sincronizado com o histórico mensal no GitHub!")
 
-# Se não foi feito upload agora, tenta carregar o último ficheiro sincronizado do GitHub
-if uploaded_file is None:
-    uploaded_file = carregar_dados_nuvem()
-    if uploaded_file is not None:
-        st.info("📊 A exibir os dados sincronizados mais recentes da operação.")
+# Carrega o histórico acumulado da nuvem
+df = carregar_historico_nuvem()
 
-if uploaded_file is not None:
-    # Leitura dos dados
-    df = pd.read_excel(uploaded_file)
-    
+if df is not None:
     # Tratamento dos dados
     df['Driver Name'] = df['Driver Name'].fillna('Sem Motorista Atribuído')
     df['Backlog time(Station)'] = df['Backlog time(Station)'].fillna(0).astype(int)
     df['Last scan type'] = df['Last scan type'].fillna('Não informado')
     df['Type'] = df['Type'].fillna('Outro')
     
+    if 'Last scan time' in df.columns:
+        df['Last scan time'] = pd.to_datetime(df['Last scan time'], errors='coerce')
+
     cols_map = {
         'Waybill No': 'Número AWB',
         'Driver Name': 'Nome do Motorista',
@@ -184,17 +183,39 @@ if uploaded_file is not None:
     }
     
     df_display = df[list(cols_map.keys())].rename(columns=cols_map)
+
+    # --- FILTRO DE DATA NA BARRA LATERAL ---
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("📅 Filtro por Período")
+    
+    if 'Data/Hora Último Scan' in df_display.columns and df_display['Data/Hora Último Scan'].notna().any():
+        min_date = df_display['Data/Hora Último Scan'].min().date()
+        max_date = df_display['Data/Hora Último Scan'].max().date()
+        
+        filtro_datas = st.sidebar.date_input(
+            "Selecione o intervalo de datas:",
+            value=(min_date, max_date),
+            min_value=min_date,
+            max_value=max_date
+        )
+        
+        if isinstance(filtro_datas, tuple) and len(filtro_datas) == 2:
+            start_d, end_d = filtro_datas
+            df_display = df_display[
+                (df_display['Data/Hora Último Scan'].dt.date >= start_d) & 
+                (df_display['Data/Hora Último Scan'].dt.date <= end_d)
+            ]
     
     # Indicadores principais (KPIs)
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Total de AWBs", len(df_display))
+    col1.metric("Total de AWBs (Histórico)", len(df_display))
     col2.metric("Motoristas Ativos", df_display[df_display['Nome do Motorista'] != 'Sem Motorista Atribuído']['Nome do Motorista'].nunique())
     col3.metric("Média de Dias em Rota", f"{df_display['Dias em Rota'].mean():.1f} dias")
     col4.metric("AWBs Críticas (>3 dias)", len(df_display[df_display['Dias em Rota'] > 3]))
     
     st.markdown("---")
 
-    # --- SEÇÃO DE GRÁFICOS VISUAIS E DETALHAMENTO ---
+    # --- SEÇÃO DE GRÁFICOS E DETALHAMENTO ---
     st.subheader("📊 Análise Visual & Detalhamento por Motorista")
     
     tab1, tab2, tab3 = st.tabs([
@@ -205,7 +226,6 @@ if uploaded_file is not None:
     
     df_motoristas = df_display[df_display['Nome do Motorista'] != 'Sem Motorista Atribuído']
     
-    # ABA 1: AWBs em Aberto com Detalhamento por Motorista
     with tab1:
         df_aberto = df_motoristas[df_motoristas['Status do Registro'].str.lower() == 'em aberto']
         awb_aberto_per_driver = df_aberto['Nome do Motorista'].value_counts().reset_index()
@@ -225,51 +245,42 @@ if uploaded_file is not None:
         
         st.markdown("---")
         st.markdown("### 🔍 Detalhar Entregas em Aberto")
-        
         lista_motoristas_pendentes = sorted(df_aberto['Nome do Motorista'].unique().tolist())
-        
         selected_driver = st.selectbox(
             "Selecione o motorista para visualizar todas as suas entregas em aberto:",
             options=lista_motoristas_pendentes,
             index=0 if len(lista_motoristas_pendentes) > 0 else None
         )
-        
         if selected_driver:
             df_driver_pendente = df_aberto[df_aberto['Nome do Motorista'] == selected_driver]
-            
             col_d1, col_d2 = st.columns(2)
             col_d1.subheader(f"🚚 Motorista: {selected_driver}")
             col_d2.metric("Total de Entregas em Aberto", len(df_driver_pendente))
-            
             st.dataframe(
                 df_driver_pendente[['Número AWB', 'Dias em Rota', 'Última Movimentação', 'Data/Hora Último Scan', 'Cidade Destino']],
                 use_container_width=True,
                 hide_index=True
             )
 
-    # ABA 2: Volume Total
     with tab2:
         awb_per_driver = df_motoristas['Nome do Motorista'].value_counts().reset_index()
         awb_per_driver.columns = ['Nome do Motorista', 'Quantidade de AWBs']
-        
         fig1 = px.bar(
             awb_per_driver, 
             x='Nome do Motorista', 
             y='Quantidade de AWBs',
             text='Quantidade de AWBs',
-            title="Total Geral de AWBs por Motorista",
+            title="Total Geral de AWBs por Motorista (Acumulado)",
             color='Quantidade de AWBs',
             color_continuous_scale='Blues'
         )
         fig1.update_layout(xaxis_tickangle=-45)
         st.plotly_chart(fig1, use_container_width=True)
         
-    # ABA 3: Média de Dias em Rota
     with tab3:
         days_per_driver = df_motoristas.groupby('Nome do Motorista')['Dias em Rota'].mean().reset_index()
         days_per_driver.columns = ['Nome do Motorista', 'Média Dias em Rota']
         days_per_driver = days_per_driver.sort_values(by='Média Dias em Rota', ascending=False)
-        
         fig2 = px.bar(
             days_per_driver, 
             x='Nome do Motorista', 
@@ -284,4 +295,4 @@ if uploaded_file is not None:
 
     st.markdown("---")
 else:
-    st.info("Aguardando o supervisor carregar o ficheiro Excel da operação para sincronizar os dados.")
+    st.info("Aguardando o supervisor carregar o primeiro ficheiro Excel para iniciar o histórico mensal.")
