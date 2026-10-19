@@ -263,3 +263,4 @@ if df is not None:
         busca_global = st.text_input("Digite o número da AWB para localizar instantaneamente:", placeholder="Ex: 3320108174832")
         
         if busca_global
+        
