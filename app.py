@@ -139,23 +139,7 @@ if st.sidebar.button("🚨 Ver AWBs Críticas em Destaque"):
 
 st.sidebar.markdown("---")
 
-# Botão de Limpeza / Reset Geral para Supervisor
 if st.session_state["user_info"]["role"] == "Supervisor":
-    st.sidebar.subheader("⚙️ Gestão de Dados")
-    if st.sidebar.button("🗑️ Limpar Todos os Dados (Reset)"):
-        st.session_state["df_ativo"] = None
-        # Tenta opcionalmente remover do GitHub se existir
-        repo = get_github_repo()
-        if repo:
-            try:
-                contents = repo.get_contents(HISTORY_FILE_PATH)
-                repo.delete_file(HISTORY_FILE_PATH, "Reset de dados", contents.sha)
-            except Exception:
-                pass
-        st.sidebar.success("Histórico limpo com sucesso! Pode subir um arquivo novo.")
-        st.rerun()
-
-    st.sidebar.markdown("---")
     with st.sidebar.expander("➕ Cadastrar Novo Utilizador"):
         with st.form("new_user_form"):
             new_username = st.text_input("Novo Login")
@@ -175,16 +159,56 @@ st.title("🚚 Painel de Acompanhamento Diário - Rotas & AWBs")
 st.markdown("---")
 
 if st.session_state["user_info"]["role"] == "Supervisor":
-    uploaded_file = st.file_uploader("Faça o upload do ficheiro Excel (.xlsx) atualizado", type=["xlsx", "xls"])
-    
+    col_up1, col_up2 = st.columns([3, 1])
+    with col_up1:
+        uploaded_file = st.file_uploader("Faça o upload do ficheiro Excel (.xlsx) atualizado", type=["xlsx", "xls"])
+    with col_up2:
+        st.write("")
+        st.write("")
+        if st.button("🔄 Forçar Limpeza / Reset"):
+            # Limpa o estado da sessão imediatamente
+            st.session_state["df_ativo"] = None
+            # Tenta apagar o ficheiro do GitHub para limpar o histórico persistido
+            repo = get_github_repo()
+            if repo:
+                try:
+                    contents = repo.get_contents(HISTORY_FILE_PATH)
+                    repo.delete_file(HISTORY_FILE_PATH, "Reset total de dados", contents.sha)
+                except Exception:
+                    pass
+            st.success("Painel limpo com sucesso!")
+            time.sleep(0.5)
+            st.rerun()
+
     if uploaded_file is not None:
         df_novo = pd.read_excel(uploaded_file)
         st.session_state["df_ativo"] = tratar_dataframe(df_novo)
+        
+        # Salva também no GitHub para persistência opcional
+        repo = get_github_repo()
+        if repo:
+            try:
+                output = io.BytesIO()
+                with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                    st.session_state["df_ativo"].to_excel(writer, index=False)
+                file_bytes = output.getvalue()
+                timestamp_str = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
+                
+                try:
+                    contents = repo.get_contents(HISTORY_FILE_PATH)
+                    repo.update_file(HISTORY_FILE_PATH, f"Upload: {timestamp_str}", file_bytes, contents.sha)
+                except Exception:
+                    repo.create_file(HISTORY_FILE_PATH, f"Criar histórico: {timestamp_str}", file_bytes)
+            except Exception:
+                pass
+                
         st.success("⚡ Planilha carregada e aplicada instantaneamente no painel!")
+        time.sleep(0.5)
+        st.rerun()
 
 df = st.session_state["df_ativo"]
 
-# Se não houver ficheiro na sessão, tenta carregar do GitHub uma vez
+# Se não houver dados na sessão, tenta carregar do GitHub (se ainda existir)
 if df is None:
     repo = get_github_repo()
     if repo:
@@ -286,4 +310,78 @@ if df is not None:
         c_d0.metric("D0 (0 Dias)", len(df_display[df_display['Faixa D0-D3'] == 'D0']))
         c_d1.metric("D1 (1 Dia)", len(df_display[df_display['Faixa D0-D3'] == 'D1']))
         c_d2.metric("D2 (2 Dias)", len(df_display[df_display['Faixa D0-D3'] == 'D2']))
-        c_
+        c_d3.metric("D3 (3 Dias)", len(df_display[df_display['Faixa D0-D3'] == 'D3']))
+        c_d_critico.metric("> D3 (Críticas)", len(df_display[df_display['Faixa D0-D3'] == '> D3']))
+
+        with st.expander("📋 Filtrar Tabela por Faixa de Aging (D0, D1, D2, D3, >D3)"):
+            faixas_selecionadas = st.multiselect(
+                "Selecione a(s) faixa(s) que pretende visualizar:",
+                options=['D0', 'D1', 'D2', 'D3', '> D3'],
+                default=['D0', 'D1', 'D2', 'D3', '> D3']
+            )
+            if faixas_selecionadas:
+                df_aging_filtrado = df_display[df_display['Faixa D0-D3'].isin(faixas_selecionadas)]
+                st.dataframe(
+                    df_aging_filtrado[['Número AWB', 'Nome do Motorista', 'Faixa D0-D3', 'Dias em Rota', 'Status do Registro', 'Cidade Destino', 'Última Movimentação', 'Data/Hora Último Scan']],
+                    use_container_width=True,
+                    hide_index=True
+                )
+
+        st.markdown("---")
+        st.subheader("📊 Análise Visual & Detalhamento por Motorista")
+        
+        tab1, tab2, tab3, tab4 = st.tabs([
+            "AWBs em Aberto por Motorista", 
+            "Volume Total de AWBs por Motorista", 
+            "Média de Dias em Rota por Motorista",
+            "Aging por Motorista (D0 a >D3)"
+        ])
+        
+        df_motoristas = df_display[df_display['Nome do Motorista'] != 'Sem Motorista Atribuído']
+        
+        with tab1:
+            df_aberto = df_motoristas[df_motoristas['Status do Registro'].str.lower() == 'em aberto']
+            awb_aberto_per_driver = df_aberto['Nome do Motorista'].value_counts().reset_index()
+            awb_aberto_per_driver.columns = ['Nome do Motorista', 'AWBs em Aberto']
+            
+            fig0 = px.bar(
+                awb_aberto_per_driver, 
+                x='Nome do Motorista', 
+                y='AWBs em Aberto',
+                text='AWBs em Aberto',
+                title="Quantidade de AWBs 'Em Aberto' por Motorista",
+                color='AWBs em Aberto',
+                color_continuous_scale='Reds'
+            )
+            fig0.update_layout(xaxis_tickangle=-45)
+            st.plotly_chart(fig0, use_container_width=True)
+            
+            st.markdown("---")
+            st.markdown("### 🔍 Detalhar Entregas em Aberto")
+            lista_motoristas_pendentes = sorted(df_aberto['Nome do Motorista'].unique().tolist())
+            selected_driver = st.selectbox(
+                "Selecione o motorista para visualizar todas as suas entregas em aberto:",
+                options=lista_motoristas_pendentes,
+                index=0 if len(lista_motoristas_pendentes) > 0 else None
+            )
+            if selected_driver:
+                df_driver_pendente = df_aberto[df_aberto['Nome do Motorista'] == selected_driver]
+                col_d1, col_d2 = st.columns(2)
+                col_d1.subheader(f"🚚 Motorista: {selected_driver}")
+                col_d2.metric("Total de Entregas em Aberto", len(df_driver_pendente))
+                st.dataframe(
+                    df_driver_pendente[['Número AWB', 'Faixa D0-D3', 'Dias em Rota', 'Última Movimentação', 'Data/Hora Último Scan', 'Cidade Destino']],
+                    use_container_width=True,
+                    hide_index=True
+                )
+
+        with tab2:
+            awb_per_driver = df_motoristas['Nome do Motorista'].value_counts().reset_index()
+            awb_per_driver.columns = ['Nome do Motorista', 'Quantidade de AWBs']
+            fig1 = px.bar(
+                awb_per_driver, 
+                x='Nome do Motorista', 
+                y='Quantidade de AWBs',
+                text='Quantidade de AWBs',
+                title="Total Geral de AWBs por Motorista (Acumulado)",
+                color
