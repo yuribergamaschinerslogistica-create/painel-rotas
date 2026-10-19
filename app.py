@@ -23,7 +23,7 @@ def get_github_repo():
             g = Github(st.secrets["GITHUB_TOKEN"])
             return g.get_repo(REPO_NAME)
     except Exception as e:
-        st.warning(f"Aviso de ligação ao GitHub: {e}")
+        pass
     return None
 
 def categorizar_dias(dias):
@@ -40,81 +40,31 @@ def categorizar_dias(dias):
 
 def tratar_dataframe(df_raw):
     df = df_raw.copy()
-    # Limpar espaços extras nos nomes das colunas
     df.columns = df.columns.str.strip()
     
     if 'Waybill No' not in df.columns:
-        # Tentar encontrar a coluna de AWB caso haja variação de escrita
         for col in df.columns:
             if 'waybill' in col.lower() or 'awb' in col.lower():
                 df = df.rename(columns={col: 'Waybill No'})
                 break
 
-    if 'Driver Name' in df.columns:
-        df['Driver Name'] = df['Driver Name'].fillna('Sem Motorista Atribuído')
-    else:
-        df['Driver Name'] = 'Sem Motorista Atribuído'
+    df['Driver Name'] = df['Driver Name'] if 'Driver Name' in df.columns else 'Sem Motorista Atribuído'
+    df['Driver Name'] = df['Driver Name'].fillna('Sem Motorista Atribuído')
 
-    if 'Backlog time(Station)' in df.columns:
-        df['Backlog time(Station)'] = df['Backlog time(Station)'].fillna(0).astype(int)
-    else:
-        df['Backlog time(Station)'] = 0
+    df['Backlog time(Station)'] = df['Backlog time(Station)'] if 'Backlog time(Station)' in df.columns else 0
+    df['Backlog time(Station)'] = df['Backlog time(Station)'].fillna(0).astype(int)
 
-    if 'Last scan type' in df.columns:
-        df['Last scan type'] = df['Last scan type'].fillna('Não informado')
-    else:
-        df['Last scan type'] = 'Não informado'
+    df['Last scan type'] = df['Last scan type'] if 'Last scan type' in df.columns else 'Não informado'
+    df['Last scan type'] = df['Last scan type'].fillna('Não informado')
 
-    if 'Type' in df.columns:
-        df['Type'] = df['Type'].fillna('Outro')
-    else:
-        df['Type'] = 'Outro'
+    df['Type'] = df['Type'] if 'Type' in df.columns else 'Outro'
+    df['Type'] = df['Type'].fillna('Outro')
     
     if 'Last scan time' in df.columns:
         df['Last scan time'] = pd.to_datetime(df['Last scan time'], errors='coerce')
 
     df['Faixa Aging'] = df['Backlog time(Station)'].apply(categorizar_dias)
     return df
-
-def carregar_historico():
-    repo = get_github_repo()
-    if repo:
-        try:
-            file_content = repo.get_contents(HISTORY_FILE_PATH)
-            decoded_content = file_content.decoded_content
-            df = pd.read_excel(io.BytesIO(decoded_content))
-            return tratar_dataframe(df)
-        except Exception:
-            pass
-    return None
-
-def sincronizar_github(df_combinado):
-    repo = get_github_repo()
-    if repo:
-        try:
-            output = io.BytesIO()
-            with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                df_combinado.to_excel(writer, index=False)
-            file_bytes = output.getvalue()
-
-            timestamp_str = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
-
-            try:
-                contents = repo.get_contents(HISTORY_FILE_PATH)
-                repo.update_file(
-                    path=HISTORY_FILE_PATH,
-                    message=f"Sync: {timestamp_str}",
-                    content=file_bytes,
-                    sha=contents.sha
-                )
-            except Exception:
-                repo.create_file(
-                    path=HISTORY_FILE_PATH,
-                    message=f"Criar histórico: {timestamp_str}",
-                    content=file_bytes
-                )
-        except Exception as e:
-            st.error(f"Erro ao salvar no GitHub: {e}")
 
 USERS_FILE = "users.json"
 
@@ -143,6 +93,9 @@ if "logged_in" not in st.session_state:
 if "view_mode" not in st.session_state:
     st.session_state["view_mode"] = "Painel Principal"
 
+if "df_ativo" not in st.session_state:
+    st.session_state["df_ativo"] = None
+
 # --- LOGIN ---
 if not st.session_state["logged_in"]:
     st.title("🔐 Login - Painel de Rotas")
@@ -170,6 +123,7 @@ st.sidebar.caption(f"Perfil: {st.session_state['user_info']['role']}")
 if st.sidebar.button("🚪 Sair / Logout"):
     st.session_state["logged_in"] = False
     st.session_state["user_info"] = None
+    st.session_state["df_ativo"] = None
     st.session_state["view_mode"] = "Painel Principal"
     st.rerun()
 
@@ -205,32 +159,25 @@ st.title("🚚 Painel de Acompanhamento Diário - Rotas & AWBs")
 st.markdown("---")
 
 if st.session_state["user_info"]["role"] == "Supervisor":
-    col_up1, col_up2 = st.columns([3, 1])
-    with col_up1:
-        uploaded_file = st.file_uploader("Faça o upload do ficheiro Excel (.xlsx) atualizado", type=["xlsx", "xls"])
-    with col_up2:
-        st.write("")
-        st.write("")
-        if st.button("🔄 Atualizar / Recarregar"):
-            st.rerun()
-
+    uploaded_file = st.file_uploader("Faça o upload do ficheiro Excel (.xlsx) atualizado", type=["xlsx", "xls"])
+    
     if uploaded_file is not None:
         df_novo = pd.read_excel(uploaded_file)
-        df_novo_tratado = tratar_dataframe(df_novo)
-        
-        df_atual = carregar_historico()
-        if df_atual is not None and 'Waybill No' in df_atual.columns and 'Waybill No' in df_novo_tratado.columns:
-            # Concatena e mantém o registo mais recente de cada AWB com base na nova planilha
-            df_combinado = pd.concat([df_atual, df_novo_tratado]).drop_duplicates(subset=['Waybill No'], keep='last')
-        else:
-            df_combinado = df_novo_tratado
+        st.session_state["df_ativo"] = tratar_dataframe(df_novo)
+        st.success("⚡ Planilha carregada e aplicada instantaneamente no painel!")
 
-        sincronizar_github(df_combinado)
-        st.success("⚡ Planilha nova integrada e guardada com sucesso!")
-        time.sleep(0.5)
-        st.rerun()
+df = st.session_state["df_ativo"]
 
-df = carregar_historico()
+# Se não houver ficheiro carregado na sessão, tenta carregar do GitHub uma única vez como padrão
+if df is None:
+    repo = get_github_repo()
+    if repo:
+        try:
+            file_content = repo.get_contents(HISTORY_FILE_PATH)
+            df = tratar_dataframe(pd.read_excel(io.BytesIO(file_content.decoded_content)))
+            st.session_state["df_ativo"] = df
+        except Exception:
+            pass
 
 if df is not None:
     cols_map = {
@@ -364,7 +311,7 @@ if df is not None:
                 text='AWBs em Aberto',
                 title="Quantidade de AWBs 'Em Aberto' por Motorista",
                 color='AWBs em Aberto',
-                    color_continuous_scale='Reds'
+                color_continuous_scale='Reds'
             )
             fig0.update_layout(xaxis_tickangle=-45)
             st.plotly_chart(fig0, use_container_width=True)
@@ -378,7 +325,7 @@ if df is not None:
                 index=0 if len(lista_motoristas_pendentes) > 0 else None
             )
             if selected_driver:
-                df_driver_pendente = df_aberto[df_aberto['Nome/Motorista'] == selected_driver] if 'Nome/Motorista' in df_aberto.columns else df_aberto[df_aberto['Nome do Motorista'] == selected_driver]
+                df_driver_pendente = df_aberto[df_aberto['Nome do Motorista'] == selected_driver]
                 col_d1, col_d2 = st.columns(2)
                 col_d1.subheader(f"🚚 Motorista: {selected_driver}")
                 col_d2.metric("Total de Entregas em Aberto", len(df_driver_pendente))
@@ -434,4 +381,4 @@ if df is not None:
 
     st.markdown("---")
 else:
-    st.info("Aguardando o supervisor carregar o primeiro ficheiro Excel para iniciar o histórico mensal.")
+    st.info("Aguardando o supervisor carregar o ficheiro Excel (.xlsx) atualizado para iniciar o painel.")
