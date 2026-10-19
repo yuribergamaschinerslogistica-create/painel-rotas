@@ -3,7 +3,6 @@ import pandas as pd
 import plotly.express as px
 import json
 import os
-import io
 import time
 from datetime import datetime
 
@@ -152,16 +151,16 @@ if st.session_state["user_info"]["role"] == "Supervisor":
     col_up1, col_up2 = st.columns([3, 1])
     with col_up1:
         uploaded_file = st.file_uploader(
-            "Faça o upload do ficheiro Excel (.xlsx) atualizado", 
+            "Faça o upload do ficheiro Excel (.xlsx) diário", 
             type=["xlsx", "xls"],
             key=f"uploader_{st.session_state['uploader_key']}"
         )
     with col_up2:
         st.write("")
         st.write("")
-        if st.button("🔄 Forçar Limpeza / Reset"):
+        if st.button("🔄 Limpar / Novo Ficheiro"):
             st.session_state["df_ativo"] = None
-            st.session_state["uploader_key"] += 1  # Reseta visualmente o uploader
+            st.session_state["uploader_key"] += 1
             st.success("Painel limpo com sucesso!")
             time.sleep(0.3)
             st.rerun()
@@ -169,7 +168,7 @@ if st.session_state["user_info"]["role"] == "Supervisor":
     if uploaded_file is not None:
         df_novo = pd.read_excel(uploaded_file)
         st.session_state["df_ativo"] = tratar_dataframe(df_novo)
-        st.success("⚡ Planilha carregada e aplicada instantaneamente no painel!")
+        st.success("⚡ Planilha carregada e aplicada instantaneamente!")
         time.sleep(0.3)
         st.rerun()
 
@@ -221,7 +220,7 @@ if df is not None:
         df_filtrada_criticas = df_criticas
         if pesquisa_central:
             df_filtrada_criticas = df_criticas[
-                df_filtrada_criticas['Número AWB'].astype(str).str.contains(pesquisa_central, case=False, na=False) |
+                df_criticas['Número AWB'].astype(str).str.contains(pesquisa_central, case=False, na=False) |
                 df_filtrada_criticas['Nome do Motorista'].str.contains(pesquisa_central, case=False, na=False)
             ]
         
@@ -253,7 +252,7 @@ if df is not None:
             st.markdown("---")
 
         col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Total de AWBs (Histórico)", len(df_display))
+        col1.metric("Total de AWBs (Ficheiro)", len(df_display))
         col2.metric("Motoristas Ativos", df_display[df_display['Nome do Motorista'] != 'Sem Motorista Atribuído']['Nome do Motorista'].nunique())
         col3.metric("Média de Dias em Rota", f"{df_display['Dias em Rota'].mean():.1f} dias")
         col4.metric("AWBs Críticas (>3 dias)", len(df_criticas))
@@ -304,4 +303,66 @@ if df is not None:
                 awb_aberto_per_driver, 
                 x='Nome do Motorista', 
                 y='AWBs em Aberto',
-                text='AWBs em
+                text='AWBs em Aberto',
+                title="Quantidade de AWBs 'Em Aberto' por Motorista",
+                color='AWBs em Aberto',
+                color_continuous_scale='Reds'
+            )
+            fig0.update_layout(xaxis_tickangle=-45)
+            st.plotly_chart(fig0, use_container_width=True)
+            
+            st.markdown("---")
+            st.markdown("### 🔍 Detalhar Entregas em Aberto")
+            lista_motoristas_pendentes = sorted(df_aberto['Nome do Motorista'].unique().tolist())
+            selected_driver = st.selectbox(
+                "Selecione o motorista para visualizar todas as suas entregas em aberto:",
+                options=lista_motoristas_pendentes,
+                index=0 if len(lista_motoristas_pendentes) > 0 else None
+            )
+            if selected_driver:
+                df_driver_pendente = df_aberto[df_aberto['Nome do Motorista'] == selected_driver]
+                col_d1, col_d2 = st.columns(2)
+                col_d1.subheader(f"🚚 Motorista: {selected_driver}")
+                col_d2.metric("Total de Entregas em Aberto", len(df_driver_pendente))
+                st.dataframe(
+                    df_driver_pendente[['Número AWB', 'Faixa D0-D3', 'Dias em Rota', 'Última Movimentação', 'Data/Hora Último Scan', 'Cidade Destino']],
+                    use_container_width=True,
+                    hide_index=True
+                )
+
+        with tab2:
+            awb_per_driver = df_motoristas['Nome do Motorista'].value_counts().reset_index()
+            awb_per_driver.columns = ['Nome do Motorista', 'Quantidade de AWBs']
+            fig1 = px.bar(
+                awb_per_driver, 
+                x='Nome do Motorista', 
+                y='Quantidade de AWBs',
+                text='Quantidade de AWBs',
+                title="Total Geral de AWBs por Motorista",
+                color='Quantidade de AWBs',
+                color_continuous_scale='Blues'
+            )
+            fig1.update_layout(xaxis_tickangle=-45)
+            st.plotly_chart(fig1, use_container_width=True)
+            
+        with tab3:
+            days_per_driver = df_motoristas.groupby('Nome do Motorista')['Dias em Rota'].mean().reset_index()
+            days_per_driver.columns = ['Nome do Motorista', 'Média Dias em Rota']
+            days_per_driver = days_per_driver.sort_values(by='Média Dias em Rota', ascending=False)
+            fig2 = px.bar(
+                days_per_driver, 
+                x='Nome do Motorista', 
+                y='Média Dias em Rota',
+                text_auto='.1f',
+                title="Média de Dias em Rota por Motorista",
+                color='Média Dias em Rota',
+                color_continuous_scale='Oranges'
+            )
+            fig2.update_layout(xaxis_tickangle=-45)
+            st.plotly_chart(fig2, use_container_width=True)
+
+        with tab4:
+            df_aging_driver = df_motoristas.groupby(['Nome do Motorista', 'Faixa D0-D3']).size().reset_index(name='Quantidade')
+            fig3 = px.bar(
+                df_aging_driver,
+                x
