@@ -118,4 +118,93 @@ if st.sidebar.button("📊 Ver Painel Principal"):
 
 if st.sidebar.button("🚨 Ver AWBs Críticas em Destaque"):
     st.session_state["view_mode"] = "AWBs Criticas"
-    st.
+    st.rerun()
+
+st.sidebar.markdown("---")
+
+if st.session_state["user_info"]["role"] == "Supervisor":
+    with st.sidebar.expander("➕ Cadastrar Novo Utilizador"):
+        with st.form("new_user_form"):
+            new_username = st.text_input("Novo Login")
+            new_name = st.text_input("Nome Completo")
+            new_password = st.text_input("Nova Senha", type="password")
+            new_role = st.selectbox("Perfil de Acesso", ["Operador", "Supervisor"])
+            create_btn = st.form_submit_button("Guardar Utilizador")
+            if create_btn:
+                if new_username and new_password and new_name:
+                    users_db[new_username] = {"name": new_name, "password": new_password, "role": new_role}
+                    save_users(users_db)
+                    st.success(f"Utilizador '{new_username}' cadastrado com sucesso!")
+                else:
+                    st.warning("Preencha todos os campos.")
+
+st.title("🚚 Painel de Acompanhamento Diário - Rotas & AWBs")
+st.markdown("---")
+
+df = None
+
+if st.session_state["user_info"]["role"] == "Supervisor":
+    uploaded_file = st.file_uploader("Faça o upload do ficheiro Excel (.xlsx) para iniciar", type=["xlsx", "xls"])
+    if uploaded_file is not None:
+        df_raw = pd.read_excel(uploaded_file)
+        df = tratar_dataframe(df_raw)
+        st.session_state["df_temp"] = df
+    elif "df_temp" in st.session_state:
+        df = st.session_state["df_temp"]
+else:
+    if "df_temp" in st.session_state:
+        df = st.session_state["df_temp"]
+
+if df is not None:
+    cols_map = {
+        'Waybill No': 'Número AWB',
+        'Driver Name': 'Nome do Motorista',
+        'Backlog time(Station)': 'Dias em Rota',
+        'Faixa Aging': 'Faixa D0-D3',
+        'Last scan type': 'Última Movimentação',
+        'Last scan time': 'Data/Hora Último Scan',
+        'Destination City': 'Cidade Destino',
+        'Type': 'Status do Registro'
+    }
+    
+    cols_existentes = [c for c in cols_map.keys() if c in df.columns]
+    df_display = df[cols_existentes].rename(columns=cols_map)
+
+    # --- FILTROS NA SIDEBAR ---
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("🔍 Filtros Globais")
+
+    # 1. Filtro por Cidade Destino
+    if 'Cidade Destino' in df_display.columns:
+        cidades_disponiveis = sorted(df_display['Cidade Destino'].astype(str).unique().tolist())
+        cidades_selecionadas = st.sidebar.multiselect(
+            "📍 Filtrar por Cidade Destino:",
+            options=cidades_disponiveis,
+            default=cidades_disponiveis
+        )
+        if cidades_selecionadas:
+            df_display = df_display[df_display['Cidade Destino'].isin(cidades_selecionadas)]
+
+    # 2. Filtro por Intervalo de Datas
+    if 'Data/Hora Último Scan' in df_display.columns and df_display['Data/Hora Último Scan'].notna().any():
+        min_date = df_display['Data/Hora Último Scan'].min().date()
+        max_date = df_display['Data/Hora Último Scan'].max().date()
+        
+        filtro_datas = st.sidebar.date_input(
+            "📅 Selecione o intervalo de datas:",
+            value=(min_date, max_date),
+            min_value=min_date,
+            max_value=max_date
+        )
+        
+        if isinstance(filtro_datas, tuple) and len(filtro_datas) == 2:
+            start_d, end_d = filtro_datas
+            df_display = df_display[
+                (df_display['Data/Hora Último Scan'].dt.date >= start_d) & 
+                (df_display['Data/Hora Último Scan'].dt.date <= end_d)
+            ]
+
+    df_criticas = df_display[df_display['Dias em Rota'] > 3]
+
+    if st.session_state["view_mode"] == "AWBs Criticas":
+        st.subheader("🚨
