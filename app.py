@@ -201,7 +201,6 @@ if st.session_state["user_info"]["role"] == "Supervisor":
             st.rerun()
 
     if uploaded_file is not None:
-        # Processamento ultra-rápido local
         df_novo = pd.read_excel(uploaded_file)
         df_novo_tratado = tratar_dataframe(df_novo)
         
@@ -211,10 +210,7 @@ if st.session_state["user_info"]["role"] == "Supervisor":
         else:
             df_combinado = df_novo_tratado
 
-        # Atualiza a memória local imediatamente
         st.session_state["df_cached"] = df_combinado
-        
-        # Sincroniza em background / na mesma execução sem travar a interface
         sincronizar_github(df_combinado)
         st.success("⚡ Dados atualizados em tempo recorde!")
 
@@ -325,4 +321,29 @@ if df is not None:
                 options=['D0', 'D1', 'D2', 'D3', '> D3'],
                 default=['D0', 'D1', 'D2', 'D3', '> D3']
             )
-            if fa
+            if faixas_selecionadas:
+                df_aging_filtrado = df_display[df_display['Faixa D0-D3'].isin(faixas_selecionadas)]
+                st.dataframe(
+                    df_aging_filtrado[['Número AWB', 'Nome do Motorista', 'Faixa D0-D3', 'Dias em Rota', 'Status do Registro', 'Cidade Destino', 'Última Movimentação', 'Data/Hora Último Scan']],
+                    use_container_width=True,
+                    hide_index=True
+                )
+
+        st.markdown("---")
+
+        # --- SEÇÃO DE GRÁFICOS E DETALHAMENTO ---
+        st.subheader("📊 Análise Visual & Detalhamento por Motorista")
+        
+        tab1, tab2, tab3, tab4 = st.tabs([
+            "AWBs em Aberto por Motorista", 
+            "Volume Total de AWBs por Motorista", 
+            "Média de Dias em Rota por Motorista",
+            "Aging por Motorista (D0 a >D3)"
+        ])
+        
+        df_motoristas = df_display[df_display['Nome do Motorista'] != 'Sem Motorista Atribuído']
+        
+        with tab1:
+            df_aberto = df_motoristas[df_motoristas['Status do Registro'].str.lower() == 'em aberto']
+            awb_aberto_per_driver = df_aberto['Nome do Motorista'].value_counts().reset_index()
+            awb_aberto_
