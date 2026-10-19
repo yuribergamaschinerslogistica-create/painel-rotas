@@ -166,31 +166,34 @@ if st.session_state["user_info"]["role"] == "Supervisor":
         st.write("")
         st.write("")
         if st.button("🔄 Forçar Limpeza / Reset"):
-            # Limpa o estado da sessão imediatamente
-            st.session_state["df_ativo"] = None
-            # Tenta apagar o ficheiro do GitHub para limpar o histórico persistido
+            # Limpa de forma absoluta a sessão
+            st.session_state["df_ativo"] = "RESETADO"
+            
+            # Remove o ficheiro do GitHub para evitar recarga fantasma
             repo = get_github_repo()
             if repo:
                 try:
                     contents = repo.get_contents(HISTORY_FILE_PATH)
-                    repo.delete_file(HISTORY_FILE_PATH, "Reset total de dados", contents.sha)
+                    repo.delete_file(HISTORY_FILE_PATH, "Reset completo", contents.sha)
                 except Exception:
                     pass
+            
             st.success("Painel limpo com sucesso!")
             time.sleep(0.5)
             st.rerun()
 
     if uploaded_file is not None:
         df_novo = pd.read_excel(uploaded_file)
-        st.session_state["df_ativo"] = tratar_dataframe(df_novo)
+        df_tratado = tratar_dataframe(df_novo)
+        st.session_state["df_ativo"] = df_tratado
         
-        # Salva também no GitHub para persistência opcional
+        # Sincroniza o novo ficheiro no GitHub
         repo = get_github_repo()
         if repo:
             try:
                 output = io.BytesIO()
                 with pd.ExcelWriter(output, engine='openpyxl') as writer:
-                    st.session_state["df_ativo"].to_excel(writer, index=False)
+                    df_tratado.to_excel(writer, index=False)
                 file_bytes = output.getvalue()
                 timestamp_str = datetime.now().strftime('%d/%m/%Y %H:%M:%S')
                 
@@ -206,10 +209,13 @@ if st.session_state["user_info"]["role"] == "Supervisor":
         time.sleep(0.5)
         st.rerun()
 
-df = st.session_state["df_ativo"]
+df = None
 
-# Se não houver dados na sessão, tenta carregar do GitHub (se ainda existir)
-if df is None:
+if st.session_state["df_ativo"] == "RESETADO":
+    df = None
+elif st.session_state["df_ativo"] is not None:
+    df = st.session_state["df_ativo"]
+else:
     repo = get_github_repo()
     if repo:
         try:
@@ -217,7 +223,7 @@ if df is None:
             df = tratar_dataframe(pd.read_excel(io.BytesIO(file_content.decoded_content)))
             st.session_state["df_ativo"] = df
         except Exception:
-            pass
+            df = None
 
 if df is not None:
     cols_map = {
@@ -384,4 +390,41 @@ if df is not None:
                 y='Quantidade de AWBs',
                 text='Quantidade de AWBs',
                 title="Total Geral de AWBs por Motorista (Acumulado)",
-                color
+                color='Quantidade de AWBs',
+                color_continuous_scale='Blues'
+            )
+            fig1.update_layout(xaxis_tickangle=-45)
+            st.plotly_chart(fig1, use_container_width=True)
+            
+        with tab3:
+            days_per_driver = df_motoristas.groupby('Nome do Motorista')['Dias em Rota'].mean().reset_index()
+            days_per_driver.columns = ['Nome do Motorista', 'Média Dias em Rota']
+            days_per_driver = days_per_driver.sort_values(by='Média Dias em Rota', ascending=False)
+            fig2 = px.bar(
+                days_per_driver, 
+                x='Nome do Motorista', 
+                y='Média Dias em Rota',
+                text_auto='.1f',
+                title="Média de Dias em Rota por Motorista",
+                color='Média Dias em Rota',
+                color_continuous_scale='Oranges'
+            )
+            fig2.update_layout(xaxis_tickangle=-45)
+            st.plotly_chart(fig2, use_container_width=True)
+
+        with tab4:
+            df_aging_driver = df_motoristas.groupby(['Nome do Motorista', 'Faixa D0-D3']).size().reset_index(name='Quantidade')
+            fig3 = px.bar(
+                df_aging_driver,
+                x='Nome do Motorista',
+                y='Quantidade',
+                color='Faixa D0-D3',
+                title="Distribuição de Aging (D0, D1, D2, D3, >D3) por Motorista",
+                category_orders={'Faixa D0-D3': ['D0', 'D1', 'D2', 'D3', '> D3']}
+            )
+            fig3.update_layout(xaxis_tickangle=-45)
+            st.plotly_chart(fig3, use_container_width=True)
+
+    st.markdown("---")
+else:
+    st.info("Aguardando o supervisor carregar o ficheiro Excel (.xlsx) atualizado para iniciar o painel.")
