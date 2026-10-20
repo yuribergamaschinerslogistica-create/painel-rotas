@@ -203,8 +203,10 @@ else:
                 df_display = df_display[df_display['Último Status'].isin(status_sel)]
 
         total_geral = len(df_display)
-        total_entregue = len(df_display[df_display['Último Status'].str.lower().str.contains('entregue', na=False)]) if 'Último Status' in df_display.columns else 0
-        total_em_rota = len(df_display[df_display['Último Status'].str.lower().str.contains('rota', na=False)]) if 'Último Status' in df_display.columns else 0
+        status_lower = df_display['Último Status'].astype(str).str.lower() if 'Último Status' in df_display.columns else pd.Series([""] * total_geral)
+        
+        total_entregue = int(status_lower.str.contains('entregue', na=False).sum())
+        total_em_rota = int(status_lower.str.contains('rota', na=False).sum())
         total_insucesso = total_geral - total_entregue - total_em_rota
         
         pct_entregue = (total_entregue / total_geral * 100) if total_geral > 0 else 0.0
@@ -216,7 +218,7 @@ else:
 
         oct_medio = 0.0
         if 'Hora de Criação' in df.columns and 'Data/Hora Última Leitura' in df.columns:
-            df_oct = df[df['Último Status'].str.lower().str.contains('entregue', na=False) & df['Hora de Criação'].notna() & df['Data/Hora Última Leitura'].notna()]
+            df_oct = df[status_lower.str.contains('entregue', na=False) & df['Hora de Criação'].notna() & df['Data/Hora Última Leitura'].notna()]
             if not df_oct.empty:
                 oct_medio = ((df_oct['Data/Hora Última Leitura'] - df_oct['Hora de Criação']).dt.total_seconds() / 86400.0).mean()
 
@@ -237,5 +239,67 @@ else:
                         if i + j < len(lista_mot):
                             mot = lista_mot[i + j]
                             df_m = df_mot_all[df_mot_all['Nome do Motorista'] == mot]
-                            m_ent = len(df_m[df_m['Último Status'].str.lower().str.contains('entregue', na=False)])
-                            m_rot = len(df_m[df_m['Último Status'].str.lower().str.contains('rota', na=
+                            m_st_low = df_m['Último Status'].astype(str).str.lower()
+                            m_ent = int(m_st_low.str.contains('entregue', na=False).sum())
+                            m_rot = int(m_st_low.str.contains('rota', na=False).sum())
+                            m_out = len(df_m) - m_ent - m_rot
+                            with cols_r[j]:
+                                with st.container(border=True):
+                                    st.markdown(f"**{mot}**")
+                                    fig = px.pie(
+                                        pd.DataFrame({'S': ['Entregue', 'Rota', 'Outros'], 'Q': [m_ent, m_rot, m_out]}),
+                                        names='S', values='Q', hole=0.6,
+                                        color='S', color_discrete_map={'Entregue': '#28a745', 'Rota': '#ffc107', 'Outros': '#dc3545'}
+                                    )
+                                    fig.update_traces(textinfo='value', showlegend=False)
+                                    fig.update_layout(margin=dict(t=5, b=5, l=5, r=5), height=160, paper_bgcolor='rgba(0,0,0,0)')
+                                    st.plotly_chart(fig, use_container_width=True, key=f"d_{transp_atual}_{i+j}")
+                                    st.write(f"Entregues: {m_ent} | Rota: {m_rot} | Outros: {m_out}")
+            else:
+                st.info("Nenhum motorista encontrado.")
+
+            st.markdown("---")
+            if st.button("Voltar"):
+                st.session_state["view_mode"] = "Painel Principal"
+                st.rerun()
+        else:
+            if total_geral > 0:
+                st.subheader(f"Progresso Geral - {transp_atual}")
+                st.markdown(
+                    f"""
+                    <div style="background-color: #ddd; border-radius: 8px; overflow: hidden; display: flex; height: 28px; width: 100%;">
+                        <div style="width: {pct_entregue}%; background-color: #28a745; text-align: center; color: white; font-weight: bold; line-height: 28px; font-size: 13px;">Entregue: {pct_entregue:.1f}%</div>
+                        <div style="width: {pct_em_rota}%; background-color: #ffc107; text-align: center; color: black; font-weight: bold; line-height: 28px; font-size: 13px;">Em rota: {pct_em_rota:.1f}%</div>
+                        <div style="width: {pct_insucesso}%; background-color: #dc3545; text-align: center; color: white; font-weight: bold; line-height: 28px; font-size: 13px;">Outros: {pct_insucesso:.1f}%</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+                st.caption(f"Total: {total_geral} pacotes | Entregues: {total_entregue} | Em Rota: {total_em_rota} | Outros: {total_insucesso}")
+                st.markdown("---")
+
+            c1, c2, c3, c4, c5, c6, c7 = st.columns(7)
+            c1.metric("Total", total_geral)
+            c2.metric("Motoristas", df_display[df_display['Nome do Motorista'] != 'Sem Motorista Atribuido']['Nome do Motorista'].nunique())
+            c3.metric("Entregues", total_entregue)
+            c4.metric("Em Rota", total_em_rota)
+            c5.metric("SLA", f"{sla_geral:.1f}%")
+            c6.metric("OTIF", f"{otif:.1f}%")
+            c7.metric("OCT", f"{oct_medio:.1f} dias")
+            
+            st.markdown("---")
+            st.subheader("Pesquisa AWB")
+            b_global = st.text_input("Número da AWB:", key=f"search_{transp_atual}")
+            if b_global:
+                df_res = df_display[df_display['Número AWB'].astype(str).str.contains(b_global, case=False, na=False)]
+                if not df_res.empty:
+                    st.success(f"{len(df_res)} registo(s) encontrado(s):")
+                    st.dataframe(df_res, use_container_width=True, hide_index=True)
+                else:
+                    st.warning("Não encontrado.")
+                st.markdown("---")
+
+            st.subheader(f"Tabela de Acompanhamento - {transp_atual}")
+            st.dataframe(df_display, use_container_width=True, hide_index=True)
+    else:
+        st.info(f"Aguardando carregamento da planilha da **{transp_atual}** para iniciar o dia.")
