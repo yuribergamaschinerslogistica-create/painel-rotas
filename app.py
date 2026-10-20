@@ -5,7 +5,7 @@ import json
 import os
 
 st.set_page_config(
-    page_title="Painel de Acompanhamento Diário",
+    page_title="Painel de Acompanhamento Diario",
     page_icon="🚚",
     layout="wide"
 )
@@ -34,20 +34,20 @@ def tratar_dataframe(df_raw):
                 df = df.rename(columns={col: 'Waybill No'})
                 break
 
-    df['Driver Name'] = df['Driver Name'] if 'Driver Name' in df.columns else 'Sem Motorista Atribuído'
-    df['Driver Name'] = df['Driver Name'].fillna('Sem Motorista Atribuído')
+    df['Driver Name'] = df['Driver Name'] if 'Driver Name' in df.columns else 'Sem Motorista Atribuido'
+    df['Driver Name'] = df['Driver Name'].fillna('Sem Motorista Atribuido')
 
     df['Backlog time(Station)'] = df['Backlog time(Station)'] if 'Backlog time(Station)' in df.columns else 0
     df['Backlog time(Station)'] = df['Backlog time(Station)'].fillna(0).astype(int)
 
-    df['Last scan type'] = df['Last scan type'] if 'Last scan type' in df.columns else 'Não informado'
-    df['Last scan type'] = df['Last scan type'].fillna('Não informado')
+    df['Last scan type'] = df['Last scan type'] if 'Last scan type' in df.columns else 'Nao informado'
+    df['Last scan type'] = df['Last scan type'].fillna('Nao informado')
 
     df['Type'] = df['Type'] if 'Type' in df.columns else 'Outro'
     df['Type'] = df['Type'].fillna('Outro')
 
-    df['Destination City'] = df['Destination City'] if 'Destination City' in df.columns else 'Não informada'
-    df['Destination City'] = df['Destination City'].fillna('Não informada')
+    df['Destination City'] = df['Destination City'] if 'Destination City' in df.columns else 'Nao informada'
+    df['Destination City'] = df['Destination City'].fillna('Nao informada')
     
     if 'Last scan time' in df.columns:
         df['Last scan time'] = pd.to_datetime(df['Last scan time'], errors='coerce')
@@ -68,7 +68,7 @@ def load_users():
                 "phone": "000000000"
             },
             "operador": {
-                "name": "Operador Padrão", 
+                "name": "Operador Padrao", 
                 "password": "123", 
                 "role": "Operador",
                 "email": "operador@logistica.com",
@@ -97,7 +97,7 @@ if "view_mode" not in st.session_state:
 if "auth_mode" not in st.session_state:
     st.session_state["auth_mode"] = "login"
 
-# --- TELA DE LOGIN / RECUPERAÇÃO ---
+# --- TELA DE LOGIN / RECUPERACAO ---
 if not st.session_state["logged_in"]:
     st.title("Acesso - Painel de Rotas")
     st.markdown("---")
@@ -106,7 +106,7 @@ if not st.session_state["logged_in"]:
     with col_b:
         if st.session_state["auth_mode"] == "login":
             with st.form("login_form"):
-                st.subheader("Iniciar Sessão")
+                st.subheader("Iniciar Sessao")
                 username_input = st.text_input("Utilizador / Login")
                 password_input = st.text_input("Senha", type="password")
                 submit_button = st.form_submit_button("Entrar")
@@ -126,7 +126,7 @@ if not st.session_state["logged_in"]:
 
         elif st.session_state["auth_mode"] == "recuperar":
             with st.form("recovery_form"):
-                st.subheader("Recuperação de Senha")
+                st.subheader("Recuperacao de Senha")
                 rec_username = st.text_input("Digite o seu Utilizador / Login")
                 rec_email = st.text_input("Digite o seu Email cadastrado")
                 rec_nova_senha = st.text_input("Defina uma Nova Senha", type="password")
@@ -137,13 +137,13 @@ if not st.session_state["logged_in"]:
                         if users_db[rec_username].get("email") == rec_email:
                             users_db[rec_username]["password"] = rec_nova_senha
                             save_users(users_db)
-                            st.success("Senha redefinida com sucesso! Faça login com a nova senha.")
+                            st.success("Senha redefinida com sucesso! Faca login com a nova senha.")
                             st.session_state["auth_mode"] = "login"
                             st.rerun()
                         else:
-                            st.error("O email informado não confere com o registo deste utilizador.")
+                            st.error("O email informado nao confere com o registo deste utilizador.")
                     else:
-                        st.error("Utilizador não encontrado.")
+                        st.error("Utilizador nao encontrado.")
             
             if st.button("Voltar ao Login"):
                 st.session_state["auth_mode"] = "login"
@@ -162,10 +162,89 @@ if st.sidebar.button("Sair / Logout"):
     st.rerun()
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("Navegação")
+st.sidebar.subheader("Navegacao")
 if st.sidebar.button("Ver Painel Principal"):
     st.session_state["view_mode"] = "Painel Principal"
     st.rerun()
 
-if st.sidebar.button("Ver AWBs Críticas em Destaque"):
-    st.session_state["view_mode"] = "AWBs Crit
+if st.sidebar.button("Ver AWBs Criticas em Destaque"):
+    st.session_state["view_mode"] = "AWBs Criticas"
+    st.rerun()
+
+st.sidebar.markdown("---")
+
+if st.session_state["user_info"]["role"] == "Supervisor":
+    with st.sidebar.expander("Cadastrar Novo Utilizador"):
+        with st.form("new_user_form"):
+            new_username = st.text_input("Login (Utilizador)")
+            new_name = st.text_input("Nome Completo")
+            new_email = st.text_input("Email")
+            new_phone = st.text_input("Telefone")
+            new_password = st.text_input("Senha Inicial", type="password")
+            new_role = st.selectbox("Perfil de Acesso", ["Operador", "Supervisor"])
+            create_btn = st.form_submit_button("Guardar Utilizador")
+            
+            if create_btn:
+                if new_username and new_password and new_name and new_email:
+                    users_db[new_username] = {
+                        "name": new_name, 
+                        "password": new_password, 
+                        "role": new_role,
+                        "email": new_email,
+                        "phone": new_phone
+                    }
+                    save_users(users_db)
+                    st.success(f"Utilizador '{new_username}' cadastrado com sucesso!")
+                else:
+                    st.warning("Preencha os campos obrigatorios (Login, Nome, Email e Senha).")
+
+st.title("Painel de Acompanhamento Diario - Rotas e AWBs")
+st.markdown("---")
+
+if st.session_state["user_info"]["role"] == "Supervisor":
+    col_up1, col_up2 = st.columns([3, 1])
+    with col_up1:
+        uploaded_file = st.file_uploader("Faca o upload do ficheiro Excel (.xlsx) para partilhar com a equipa", type=["xlsx", "xls"])
+        if uploaded_file is not None:
+            df_raw = pd.read_excel(uploaded_file)
+            df_tratado = tratar_dataframe(df_raw)
+            df_tratado.to_excel(DATA_FILE, index=False)
+            st.success("Planilha carregada e partilhada com todos os utilizadores online!")
+    with col_up2:
+        st.write("")
+        st.write("")
+        if st.button("Limpar Dados Partilhados"):
+            if os.path.exists(DATA_FILE):
+                os.remove(DATA_FILE)
+            st.success("Dados limpos para toda a equipa!")
+            st.rerun()
+
+df = None
+if os.path.exists(DATA_FILE):
+    try:
+        df = pd.read_excel(DATA_FILE)
+        if 'Last scan time' in df.columns:
+            df['Last scan time'] = pd.to_datetime(df['Last scan time'], errors='coerce')
+    except Exception:
+        df = None
+
+if df is not None:
+    cols_map = {
+        'Waybill No': 'Numero AWB',
+        'Driver Name': 'Nome do Motorista',
+        'Backlog time(Station)': 'Dias em Rota',
+        'Faixa Aging': 'Faixa D0-D3',
+        'Last scan type': 'Ultima Movimentacao',
+        'Last scan time': 'Data/Hora Ultimo Scan',
+        'Destination City': 'Cidade Destino',
+        'Type': 'Status do Registro'
+    }
+    
+    cols_existentes = [c for c in cols_map.keys() if c in df.columns]
+    df_display = df[cols_existentes].rename(columns=cols_map)
+
+    # --- FILTROS NA SIDEBAR ---
+    st.sidebar.markdown("---")
+    st.sidebar.subheader("Filtros Globais")
+
+    # 1. Filtro por Cidade Destino
