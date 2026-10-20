@@ -135,18 +135,129 @@ if st.sidebar.button("Histórico de Dias"):
     st.session_state["view_mode"] = "Historico"
     st.rerun()
 
-# --- CADASTRO DE NOVOS COLABORADORES (APENAS SUPERVISOR) ---
+# --- CADASTRO DE NOVOS COLABORADORES ---
 if st.session_state["user_info"]["role"] == "Supervisor":
     st.sidebar.markdown("---")
     with st.sidebar.expander("Cadastrar Novo Colaborador"):
         with st.form("new_user_form"):
-            new_username = st.text_input("Login (Utilizador)")
-            new_name = st.text_input("Nome Completo")
-            new_email = st.text_input("Email")
-            new_phone = st.text_input("Telefone")
-            new_password = st.text_input("Senha Inicial", type="password")
-            new_role = st.selectbox("Perfil", ["Operador", "Supervisor"])
-            create_btn = st.form_submit_button("Guardar Utilizador")
-            
-            if create_btn:
-                if new_username and new
+            new_u = st.text_input("Login (Utilizador)")
+            new_n = st.text_input("Nome Completo")
+            new_e = st.text_input("Email")
+            new_p = st.text_input("Telefone")
+            new_s = st.text_input("Senha Inicial", type="password")
+            new_r = st.selectbox("Perfil", ["Operador", "Supervisor"])
+            if st.form_submit_button("Guardar Utilizador"):
+                if new_u and new_s and new_n:
+                    users_db[new_u] = {
+                        "name": new_n, 
+                        "password": new_s, 
+                        "role": new_r,
+                        "email": new_e,
+                        "phone": new_p
+                    }
+                    save_users(users_db)
+                    st.sidebar.success(f"Utilizador '{new_u}' cadastrado!")
+                else:
+                    st.sidebar.warning("Preencha os campos obrigatórios.")
+
+transp_atual = st.session_state["transportadora_ativa"]
+config_atual = FILES[transp_atual]
+DATA_FILE = config_atual["data"]
+
+col_t1, col_t2 = st.columns([1, 8])
+with col_t1:
+    if os.path.exists(config_atual["logo"]):
+        st.image(config_atual["logo"], width=90)
+with col_t2:
+    st.title(f"Painel de Acompanhamento - {transp_atual}")
+st.markdown("---")
+
+if st.session_state["view_mode"] == "Historico":
+    st.subheader(f"📚 Histórico - {transp_atual}")
+    prefixo = config_atual["prefix"]
+    arquivos = sorted([f for f in os.listdir(HISTORY_DIR) if f.startswith(prefix) and f.endswith('.xlsx')], reverse=True)
+    if arquivos:
+        sel = st.selectbox("Selecione o ficheiro anterior:", options=arquivos)
+        if sel:
+            df_h = pd.read_excel(os.path.join(HISTORY_DIR, sel))
+            st.success(f"Registos: {len(df_h)}")
+            st.dataframe(df_h, use_container_width=True, hide_index=True)
+    else:
+        st.info(f"Nenhum histórico encontrado para {transp_atual}.")
+    if st.button("⬅️ Voltar"):
+        st.session_state["view_mode"] = "Painel Principal"
+        st.rerun()
+else:
+    if st.session_state["user_info"]["role"] == "Supervisor":
+        c1, c2 = st.columns([3, 1])
+        with c1:
+            up_file = st.file_uploader(f"Carregar Planilha da {transp_atual} (.xlsx)", type=["xlsx", "xls"])
+            if up_file is not None:
+                try:
+                    df_r = pd.read_excel(up_file, sheet_name=0)
+                    df_proc = tratar_dataframe_imile(df_r) if transp_atual == "iMile" else tratar_dataframe_anjun(df_r)
+                    df_proc.to_excel(DATA_FILE, index=False)
+                    st.success(f"Planilha da {transp_atual} carregada com sucesso!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erro ao processar: {e}")
+        with c2:
+            st.write("")
+            st.write("")
+            with st.expander(f"🔒 Encerrar Dia ({transp_atual})"):
+                with st.form(f"form_arq_{transp_atual}"):
+                    senha_c = st.text_input("Senha:", type="password")
+                    if st.form_submit_button("Confirmar"):
+                        u_key = st.session_state.get("username_key", "")
+                        if u_key in users_db and users_db[u_key]["password"] == senha_c:
+                            if os.path.exists(DATA_FILE):
+                                dh = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                                novo_nome = f"{config_atual['prefix']}_fechamento_{dh}.xlsx"
+                                os.rename(DATA_FILE, os.path.join(HISTORY_DIR, novo_nome))
+                                st.success("Dia encerrado e sistema zerado!")
+                                st.rerun()
+                            else:
+                                st.warning("Sem dados ativos.")
+                        else:
+                            st.error("Senha incorreta.")
+
+    df = None
+    if os.path.exists(DATA_FILE):
+        try:
+            df = pd.read_excel(DATA_FILE)
+        except:
+            df = None
+    elif os.path.exists("dados_atuais.xlsx"):
+        try:
+            df = pd.read_excel("dados_atuais.xlsx")
+        except:
+            df = None
+
+    if df is not None and not df.empty:
+        if 'Data/Hora Última Leitura' in df.columns:
+            df['Data/Hora Última Leitura'] = pd.to_datetime(df['Data/Hora Última Leitura'], errors='coerce')
+        if 'Hora de Criação' in df.columns:
+            df['Hora de Criação'] = pd.to_datetime(df['Hora de Criação'], errors='coerce')
+
+        cols = ['Número AWB', 'Nome do Motorista', 'Último Status', 'Cidade Destino', 'Data/Hora Última Leitura', 'Hora de Criação']
+        df_display = df[[c for c in cols if c in df.columns]]
+
+        st.sidebar.markdown("---")
+        st.sidebar.subheader(f"Filtros ({transp_atual})")
+
+        if 'Cidade Destino' in df_display.columns:
+            cidades = sorted(df_display['Cidade Destino'].astype(str).unique().tolist())
+            c_sel = st.sidebar.multiselect("Cidade Destino:", options=cidades, default=cidades, key=f"c_{transp_atual}")
+            if c_sel:
+                df_display = df_display[df_display['Cidade Destino'].isin(c_sel)]
+
+        if 'Último Status' in df_display.columns:
+            status_list = sorted(df_display['Último Status'].astype(str).unique().tolist())
+            s_sel = st.sidebar.multiselect("Último Status:", options=status_list, default=status_list, key=f"s_{transp_atual}")
+            if s_sel:
+                df_display = df_display[df_display['Último Status'].isin(s_sel)]
+
+        total_geral = len(df_display)
+        status_s = df_display['Último Status'].astype(str).str.lower() if 'Último Status' in df_display.columns else pd.Series([""] * total_geral)
+        
+        is_ent = status_s.str.contains('entregue
