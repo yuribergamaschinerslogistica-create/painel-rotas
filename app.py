@@ -244,4 +244,11 @@ if df is not None and not df.empty:
 
     # --- CÁLCULOS GLOBAIS ---
     total_geral = len(df_display)
-    total_
+    total_entregue = len(df_display[df_display['Último Status'].str.lower() == 'entregue']) if 'Último Status' in df_display.columns else 0
+    total_em_rota = len(df_display[df_display['Último Status'].str.lower() == 'em rota de entrega']) if 'Último Status' in df_display.columns else 0
+    total_insucesso = total_geral - (total_entregue + total_em_rota)
+
+    # --- TELA: PAINEL INDIVIDUAL POR MOTORISTA ---
+    if st.session_state["view_mode"] == "Painel Motoristas":
+        st.subheader("👤 Painel Individual por Motorista")
+        st.markdown("Acompanhamento do status de entregas por cada motorista em formato de cart
