@@ -215,7 +215,7 @@ if st.session_state["user_info"]["role"] == "Supervisor":
                 df_raw = pd.read_excel(uploaded_file, sheet_name=0)
                 df_tratado = tratar_dataframe(df_raw)
                 df_tratado.to_excel(DATA_FILE, index=False)
-                st.success("Planilha carregada e partilhada com todos!")
+                st.success("Planilha carregada e partilhada com todos os utilizadores online!")
                 st.rerun()
             except Exception as e:
                 st.error(f"Erro ao processar o ficheiro: {e}")
@@ -247,13 +247,20 @@ if df is not None and not df.empty:
     total_em_rota = len(df_display[df_display['Último Status'].str.lower() == 'em rota de entrega']) if 'Último Status' in df_display.columns else 0
     total_insucesso = total_geral - (total_entregue + total_em_rota)
 
-    # --- TELA: PAINEL POR MOTORISTA (ESTILO CARTÕES COM ROSCA) ---
+    # --- TELA: PAINEL POR MOTORISTA COM BUSCA E FILTRO DE STATUS ---
     if st.session_state["view_mode"] == "Painel Motoristas":
         st.subheader("Painel Individual por Motorista")
-        st.markdown("Acompanhamento de entregas por cada motorista:")
+        st.markdown("Pesquise pelo nome do motorista ou clique nos status para detalhar as AWBs:")
+        
+        # Campo de busca por motorista
+        busca_motorista = st.text_input("🔍 Digite o nome do motorista para localizar:", placeholder="Ex: Rodrigo")
         st.markdown("---")
 
         df_motoristas = df_display[df_display['Nome do Motorista'] != 'Sem Motorista Atribuido']
+        
+        if busca_motorista:
+            df_motoristas = df_motoristas[df_motoristas['Nome do Motorista'].astype(str).str.contains(busca_motorista, case=False, na=False)]
+
         lista_motoristas = sorted(df_motoristas['Nome do Motorista'].unique().tolist())
 
         if lista_motoristas:
@@ -298,12 +305,26 @@ if df is not None and not df.empty:
                                 )
                                 st.plotly_chart(fig_donut, use_container_width=True, key=f"donut_{i+j}")
                                 
-                                st.write(f"Entregue: {m_entregue}")
-                                st.write(f"Em rota: {m_em_rota}")
-                                st.write(f"Outros/Anormal: {m_anormal}")
+                                # Seletor interativo de status para ver as AWBs daquele motorista
+                                status_clique = st.selectbox(
+                                    f"Ver AWBs de {motorista}:",
+                                    options=["Selecionar...", "Entregue", "Em rota de entrega", "Outros/Anormal"],
+                                    key=f"sel_{i+j}"
+                                )
+                                
+                                if status_clique == "Entregue":
+                                    df_detalhe = df_mot[df_mot['Último Status'].str.lower() == 'entregue']
+                                    st.dataframe(df_detalhe[['Número AWB', 'Último Status', 'Cidade Destino']], use_container_width=True, hide_index=True)
+                                elif status_clique == "Em rota de entrega":
+                                    df_detalhe = df_mot[df_mot['Último Status'].str.lower() == 'em rota de entrega']
+                                    st.dataframe(df_detalhe[['Número AWB', 'Último Status', 'Cidade Destino']], use_container_width=True, hide_index=True)
+                                elif status_clique == "Outros/Anormal":
+                                    df_detalhe = df_mot[~df_mot['Último Status'].str.lower().isin(['entregue', 'em rota de entrega'])]
+                                    st.dataframe(df_detalhe[['Número AWB', 'Último Status', 'Cidade Destino']], use_container_width=True, hide_index=True)
         else:
-            st.info("Nenhum motorista encontrado.")
+            st.info("Nenhum motorista encontrado com este nome.")
 
+        st.markdown("---")
         if st.button("Voltar ao Painel Principal"):
             st.session_state["view_mode"] = "Painel Principal"
             st.rerun()
