@@ -266,12 +266,4 @@ else:
         total_geral = len(df_display)
         status_lower = df_display['Último Status'].astype(str).str.lower() if 'Último Status' in df_display.columns else pd.Series([""] * total_geral)
         
-        total_entregue = int(status_lower.str.contains('entregue', na=False).sum())
-        total_em_rota = int(status_lower.str.contains('rota', na=False).sum())
-        total_insucesso = total_geral - total_entregue - total_em_rota
-        
-        pct_entregue = (total_entregue / total_geral * 100) if total_geral > 0 else 0.0
-        pct_em_rota = (total_em_rota / total_geral * 100) if total_geral > 0 else 0.0
-        pct_insucesso = (total_insucesso / total_geral * 100) if total_geral > 0 else 0.0
-
-        sla_geral = pct_
+        total_entregue = int(status_lower.str.contains
