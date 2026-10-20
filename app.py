@@ -228,7 +228,6 @@ if st.session_state["user_info"]["role"] == "Supervisor":
             st.success("Dados limpos!")
             st.rerun()
 
-# Se nao carregou agora via upload, tenta ler o ficheiro salvo
 if df is None and os.path.exists(DATA_FILE):
     try:
         df = pd.read_excel(DATA_FILE)
@@ -248,6 +247,7 @@ if df is not None and not df.empty:
     total_insucesso = total_geral - (total_entregue + total_em_rota)
     
     sla_geral = (total_entregue / total_geral * 100) if total_geral > 0 else 0.0
+    otif = (total_entregue / total_geral * 100) if total_geral > 0 else 0.0
 
     # --- TELA: PAINEL POR MOTORISTA COM BUSCA E FILTRO DE STATUS ---
     if st.session_state["view_mode"] == "Painel Motoristas":
@@ -373,12 +373,13 @@ if df is not None and not df.empty:
             st.caption(f"Total: {total_geral} pacotes | Entregues: {total_entregue} | Em Rota: {total_em_rota} | Outros: {total_insucesso}")
             st.markdown("---")
 
-        col1, col2, col3, col4, col5 = st.columns(5)
+        col1, col2, col3, col4, col5, col6 = st.columns(6)
         col1.metric("Total de Pacotes", total_geral)
         col2.metric("Motoristas Ativos", df_display[df_display['Nome do Motorista'] != 'Sem Motorista Atribuido']['Nome do Motorista'].nunique() if 'Nome do Motorista' in df_display.columns else 0)
         col3.metric("Entregues", total_entregue)
         col4.metric("Em Rota de Entrega", total_em_rota)
         col5.metric("SLA Geral", f"{sla_geral:.1f}%")
+        col6.metric("OTIF", f"{otif:.1f}%")
         
         st.markdown("---")
         st.subheader("Pesquisa de AWB")
