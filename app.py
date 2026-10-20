@@ -238,6 +238,7 @@ if st.session_state["view_mode"] == "Historico":
         st.rerun()
 
 else:
+    df = None
     if st.session_state["user_info"]["role"] == "Supervisor":
         col_up1, col_up2 = st.columns([3, 1])
         with col_up1:
@@ -245,10 +246,9 @@ else:
             if uploaded_file is not None:
                 try:
                     df_raw = pd.read_excel(uploaded_file, sheet_name=0)
-                    df_tratado = tratar_dataframe(df_raw)
-                    df_tratado.to_excel(DATA_FILE, index=False)
-                    st.success("Planilha carregada com sucesso!")
-                    st.rerun()
+                    df = tratar_dataframe(df_raw)
+                    df.to_excel(DATA_FILE, index=False)
+                    st.success("Planilha carregada e processada com sucesso!")
                 except Exception as e:
                     st.error(f"Erro ao processar o ficheiro: {e}")
         
@@ -266,4 +266,95 @@ else:
                         if user_key in users_db and users_db[user_key]["password"] == senha_confirmacao:
                             if os.path.exists(DATA_FILE):
                                 data_hoje = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                                destino_hist = os
+                                destino_hist = os.path.join(HISTORY_DIR, f"fechamento_{data_hoje}.xlsx")
+                                os.rename(DATA_FILE, destino_hist)
+                                st.success("Dia encerrado! Dados arquivados com sucesso e sistema zerado.")
+                                st.rerun()
+                            else:
+                                st.warning("Não há dados ativos para arquivar.")
+                        else:
+                            st.error("Senha incorreta. Fechamento cancelado.")
+
+    if df is None and os.path.exists(DATA_FILE):
+        try:
+            df = pd.read_excel(DATA_FILE)
+            if 'Data/Hora Última Leitura' in df.columns:
+                df['Data/Hora Última Leitura'] = pd.to_datetime(df['Data/Hora Última Leitura'], errors='coerce')
+            if 'Hora de Criação' in df.columns:
+                df['Hora de Criação'] = pd.to_datetime(df['Hora de Criação'], errors='coerce')
+        except Exception:
+            df = None
+
+    if df is not None and not df.empty:
+        cols_desejadas = ['Número AWB', 'Nome do Motorista', 'Último Status', 'Cidade Destino', 'Data/Hora Última Leitura', 'Hora de Criação']
+        cols_existentes = [c for c in cols_desejadas if c in df.columns]
+        df_display = df[cols_existentes]
+
+        total_geral = len(df_display)
+        total_entregue = len(df_display[df_display['Último Status'].str.lower() == 'entregue']) if 'Último Status' in df_display.columns else 0
+        total_em_rota = len(df_display[df_display['Último Status'].str.lower() == 'em rota de entrega']) if 'Último Status' in df_display.columns else 0
+        total_insucesso = total_geral - (total_entregue + total_em_rota)
+        
+        pct_entregue = (total_entregue / total_geral * 100) if total_geral > 0 else 0.0
+        pct_em_rota = (total_em_rota / total_geral * 100) if total_geral > 0 else 0.0
+        pct_insucesso = (total_insucesso / total_geral * 100) if total_geral > 0 else 0.0
+
+        sla_geral = pct_entregue
+        otif = pct_entregue
+
+        oct_medio = 0.0
+        if 'Hora de Criação' in df.columns and 'Data/Hora Última Leitura' in df.columns:
+            df_entregues_oct = df[(df['Último Status'].str.lower() == 'entregue') & df['Hora de Criação'].notna() & df['Data/Hora Última Leitura'].notna()]
+            if not df_entregues_oct.empty:
+                diferencas = (df_entregues_oct['Data/Hora Última Leitura'] - df_entregues_oct['Hora de Criação']).dt.total_seconds() / 86400.0
+                oct_medio = diferencas.mean()
+
+        # --- TELA: PAINEL POR MOTORISTA ---
+        if st.session_state["view_mode"] == "Painel Motoristas":
+            st.subheader("Painel Individual por Motorista")
+            st.markdown("Pesquise pelo nome do motorista ou clique nos status para detalhar as AWBs:")
+            
+            busca_motorista = st.text_input("🔍 Digite o nome do motorista para localizar:", placeholder="Ex: Rodrigo")
+            st.markdown("---")
+
+            df_motoristas = df_display[df_display['Nome do Motorista'] != 'Sem Motorista Atribuido']
+            
+            if busca_motorista:
+                df_motoristas = df_motoristas[df_motoristas['Nome do Motorista'].astype(str).str.contains(busca_motorista, case=False, na=False)]
+
+            lista_motoristas = sorted(df_motoristas['Nome do Motorista'].unique().tolist())
+
+            if lista_motoristas:
+                cols_per_row = 3
+                for i in range(0, len(lista_motoristas), cols_per_row):
+                    row_cols = st.columns(cols_per_row)
+                    for j in range(cols_per_row):
+                        if i + j < len(lista_motoristas):
+                            motorista = lista_motoristas[i + j]
+                            df_mot = df_motoristas[df_motoristas['Nome do Motorista'] == motorista]
+                            
+                            m_entregue = len(df_mot[df_mot['Último Status'].str.lower() == 'entregue'])
+                            m_em_rota = len(df_mot[df_mot['Último Status'].str.lower() == 'em rota de entrega'])
+                            m_anormal = len(df_mot) - (m_entregue + m_em_rota)
+                            
+                            with row_cols[j]:
+                                with st.container(border=True):
+                                    st.markdown(f"**{motorista}**")
+                                    
+                                    df_pie = pd.DataFrame({
+                                        'Status': ['Entregue', 'Em rota', 'Outros/Anormal'],
+                                        'Quantidade': [m_entregue, m_em_rota, m_anormal]
+                                    })
+                                    fig_donut = px.pie(
+                                        df_pie, 
+                                        names='Status', 
+                                        values='Quantidade', 
+                                        hole=0.6,
+                                        color='Status',
+                                        color_discrete_map={
+                                            'Entregue': '#28a745', 
+                                            'Em rota': '#ffc107', 
+                                            'Outros/Anormal': '#dc3545'
+                                        }
+                                    )
+                                    fig_donut.update_traces(textinfo='value', textfont_size=12, showlegend=False)
