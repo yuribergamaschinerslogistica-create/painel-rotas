@@ -99,7 +99,7 @@ if "auth_mode" not in st.session_state:
 
 # --- TELA DE LOGIN / RECUPERAÇÃO ---
 if not st.session_state["logged_in"]:
-    st.title("🔐 Acesso - Painel de Rotas")
+    st.title("Acesso - Painel de Rotas")
     st.markdown("---")
     col_a, col_b, col_c = st.columns([1, 2, 1])
     
@@ -120,13 +120,13 @@ if not st.session_state["logged_in"]:
                     else:
                         st.error("Utilizador ou senha incorretos.")
             
-            if st.button("🔄 Esqueci a minha senha / Recuperar Acesso"):
+            if st.button("Esqueci a minha senha / Recuperar Acesso"):
                 st.session_state["auth_mode"] = "recuperar"
                 st.rerun()
 
         elif st.session_state["auth_mode"] == "recuperar":
             with st.form("recovery_form"):
-                st.subheader("🔑 Recuperação de Senha")
+                st.subheader("Recuperação de Senha")
                 rec_username = st.text_input("Digite o seu Utilizador / Login")
                 rec_email = st.text_input("Digite o seu Email cadastrado")
                 rec_nova_senha = st.text_input("Defina uma Nova Senha", type="password")
@@ -145,4 +145,27 @@ if not st.session_state["logged_in"]:
                     else:
                         st.error("Utilizador não encontrado.")
             
-            if st.button("⬅️ Voltar ao Login
+            if st.button("Voltar ao Login"):
+                st.session_state["auth_mode"] = "login"
+                st.rerun()
+                
+    st.stop()
+
+# --- SIDEBAR ---
+st.sidebar.title(f"Utilizador: {st.session_state['user_info']['name']}")
+st.sidebar.caption(f"Perfil: {st.session_state['user_info']['role']}")
+
+if st.sidebar.button("Sair / Logout"):
+    st.session_state["logged_in"] = False
+    st.session_state["user_info"] = None
+    st.session_state["view_mode"] = "Painel Principal"
+    st.rerun()
+
+st.sidebar.markdown("---")
+st.sidebar.subheader("Navegação")
+if st.sidebar.button("Ver Painel Principal"):
+    st.session_state["view_mode"] = "Painel Principal"
+    st.rerun()
+
+if st.sidebar.button("Ver AWBs Críticas em Destaque"):
+    st.session_state["view_mode"] = "AWBs Crit
