@@ -206,6 +206,7 @@ if st.session_state["user_info"]["role"] == "Supervisor":
 st.title("Painel de Acompanhamento Diario - Rotas e AWBs")
 st.markdown("---")
 
+df = None
 if st.session_state["user_info"]["role"] == "Supervisor":
     col_up1, col_up2 = st.columns([3, 1])
     with col_up1:
@@ -213,10 +214,9 @@ if st.session_state["user_info"]["role"] == "Supervisor":
         if uploaded_file is not None:
             try:
                 df_raw = pd.read_excel(uploaded_file, sheet_name=0)
-                df_tratado = tratar_dataframe(df_raw)
-                df_tratado.to_excel(DATA_FILE, index=False)
-                st.success("Planilha carregada e partilhada com todos os utilizadores online!")
-                st.rerun()
+                df = tratar_dataframe(df_raw)
+                df.to_excel(DATA_FILE, index=False)
+                st.success("Planilha carregada com sucesso!")
             except Exception as e:
                 st.error(f"Erro ao processar o ficheiro: {e}")
     with col_up2:
@@ -228,8 +228,8 @@ if st.session_state["user_info"]["role"] == "Supervisor":
             st.success("Dados limpos!")
             st.rerun()
 
-df = None
-if os.path.exists(DATA_FILE):
+# Se nao carregou agora via upload, tenta ler o ficheiro salvo
+if df is None and os.path.exists(DATA_FILE):
     try:
         df = pd.read_excel(DATA_FILE)
         if 'Data/Hora Última Leitura' in df.columns:
@@ -247,7 +247,6 @@ if df is not None and not df.empty:
     total_em_rota = len(df_display[df_display['Último Status'].str.lower() == 'em rota de entrega']) if 'Último Status' in df_display.columns else 0
     total_insucesso = total_geral - (total_entregue + total_em_rota)
     
-    # Cálculo do SLA Geral (Percentagem de Entregues sobre o Total)
     sla_geral = (total_entregue / total_geral * 100) if total_geral > 0 else 0.0
 
     # --- TELA: PAINEL POR MOTORISTA COM BUSCA E FILTRO DE STATUS ---
@@ -358,3 +357,45 @@ if df is not None and not df.empty:
         if total_geral > 0:
             pct_entregue = (total_entregue / total_geral) * 100
             pct_em_rota = (total_em_rota / total_geral) * 100
+            pct_insucesso = (total_insucesso / total_geral) * 100
+
+            st.subheader("Progresso Geral das Entregas")
+            st.markdown(
+                f"""
+                <div style="background-color: #ddd; border-radius: 8px; overflow: hidden; display: flex; height: 28px; width: 100%;">
+                    <div style="width: {pct_entregue}%; background-color: #28a745; text-align: center; color: white; font-weight: bold; line-height: 28px; font-size: 13px;" title="Entregue: {total_entregue}">Entregue: {pct_entregue:.1f}%</div>
+                    <div style="width: {pct_em_rota}%; background-color: #ffc107; text-align: center; color: black; font-weight: bold; line-height: 28px; font-size: 13px;" title="Em rota: {total_em_rota}">Em rota: {pct_em_rota:.1f}%</div>
+                    <div style="width: {pct_insucesso}%; background-color: #dc3545; text-align: center; color: white; font-weight: bold; line-height: 28px; font-size: 13px;" title="Outros: {total_insucesso}">Outros: {pct_insucesso:.1f}%</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+            st.caption(f"Total: {total_geral} pacotes | Entregues: {total_entregue} | Em Rota: {total_em_rota} | Outros: {total_insucesso}")
+            st.markdown("---")
+
+        col1, col2, col3, col4, col5 = st.columns(5)
+        col1.metric("Total de Pacotes", total_geral)
+        col2.metric("Motoristas Ativos", df_display[df_display['Nome do Motorista'] != 'Sem Motorista Atribuido']['Nome do Motorista'].nunique() if 'Nome do Motorista' in df_display.columns else 0)
+        col3.metric("Entregues", total_entregue)
+        col4.metric("Em Rota de Entrega", total_em_rota)
+        col5.metric("SLA Geral", f"{sla_geral:.1f}%")
+        
+        st.markdown("---")
+        st.subheader("Pesquisa de AWB")
+        busca_global = st.text_input("Digite o numero da AWB:", placeholder="Ex: 3320184118564")
+        
+        if busca_global and 'Número AWB' in df_display.columns:
+            df_resultado_busca = df_display[df_display['Número AWB'].astype(str).str.contains(busca_global, case=False, na=False)]
+            if len(df_resultado_busca) > 0:
+                st.success(f"Encontrado(s) {len(df_resultado_busca)} registo(s):")
+                st.dataframe(df_resultado_busca, use_container_width=True, hide_index=True)
+            else:
+                st.warning("Nenhuma AWB encontrada.")
+            st.markdown("---")
+
+        st.subheader("Tabela de Acompanhamento")
+        st.dataframe(df_display, use_container_width=True, hide_index=True)
+
+    st.markdown("---")
+else:
+    st.info("Aguardando o supervisor carregar a nova planilha (.xlsx).")
