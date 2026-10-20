@@ -75,7 +75,6 @@ if not st.session_state["logged_in"]:
                     st.error("Dados incorretos.")
     st.stop()
 
-# --- SIDEBAR COM LOGO RS LOGÍSTICA ---
 if os.path.exists("logo_base.png"):
     st.sidebar.image("logo_base.png", use_container_width=True)
 
@@ -192,3 +191,19 @@ else:
 
     if df is not None and not df.empty:
         if 'Data/Hora Última Leitura' in df.columns:
+            df['Data/Hora Última Leitura'] = pd.to_datetime(df['Data/Hora Última Leitura'], errors='coerce')
+        if 'Hora de Criação' in df.columns:
+            df['Hora de Criação'] = pd.to_datetime(df['Hora de Criação'], errors='coerce')
+
+        cols = ['Número AWB', 'Nome do Motorista', 'Último Status', 'Cidade Destino', 'Data/Hora Última Leitura', 'Hora de Criação']
+        df_disp = df[[c for c in cols if c in df.columns]]
+
+        st.sidebar.markdown("---")
+        st.sidebar.subheader(f"Filtros ({t_atual})")
+
+        if 'Nome do Motorista' in df_disp.columns:
+            mots = sorted(df_disp['Nome do Motorista'].astype(str).unique().tolist())
+            m_s = st.sidebar.multiselect("Nome do Motorista:", options=mots, default=mots, key=f"m_filt_{t_atual}")
+            if m_s: df_disp = df_disp[df_disp['Nome do Motorista'].isin(m_s)]
+
+        if 'Cidade Destino' in df
