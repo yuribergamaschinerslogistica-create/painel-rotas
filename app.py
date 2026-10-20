@@ -216,4 +216,32 @@ if st.session_state["user_info"]["role"] == "Supervisor":
                 df_tratado = tratar_dataframe(df_raw)
                 df_tratado.to_excel(DATA_FILE, index=False)
                 st.success("Planilha carregada e partilhada com todos os utilizadores online!")
-                st
+                st.rerun()
+            except Exception as e:
+                st.error(f"Erro ao processar o ficheiro Excel: {e}")
+    with col_up2:
+        st.write("")
+        st.write("")
+        if st.button("Limpar Dados Partilhados"):
+            if os.path.exists(DATA_FILE):
+                os.remove(DATA_FILE)
+            st.success("Dados limpos para toda a equipa!")
+            st.rerun()
+
+df = None
+if os.path.exists(DATA_FILE):
+    try:
+        df = pd.read_excel(DATA_FILE)
+        if 'Data/Hora Última Leitura' in df.columns:
+            df['Data/Hora Última Leitura'] = pd.to_datetime(df['Data/Hora Última Leitura'], errors='coerce')
+    except Exception:
+        df = None
+
+if df is not None and not df.empty:
+    cols_desejadas = ['Número AWB', 'Nome do Motorista', 'Último Status', 'Cidade Destino', 'Data/Hora Última Leitura']
+    cols_existentes = [c for c in cols_desejadas if c in df.columns]
+    df_display = df[cols_existentes]
+
+    # --- CÁLCULOS GLOBAIS ---
+    total_geral = len(df_display)
+    total_
