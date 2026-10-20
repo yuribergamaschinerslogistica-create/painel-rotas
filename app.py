@@ -288,8 +288,88 @@ if df is not None:
         df_filtrada_criticas = df_criticas
         if pesquisa_central:
             df_filtrada_criticas = df_criticas[
-                df_criticas['Número AWB'].astype(str).str.contains(pesquisa_central, case=False, na=False) |
+                df_filtrada_criticas['Número AWB'].astype(str).str.contains(pesquisa_central, case=False, na=False) |
                 df_filtrada_criticas['Nome do Motorista'].str.contains(pesquisa_central, case=False, na=False)
             ]
         
         st.dataframe(
+            df_filtrada_criticas[['Número AWB', 'Nome do Motorista', 'Faixa D0-D3', 'Dias em Rota', 'Cidade Destino', 'Última Movimentação', 'Data/Hora Último Scan']],
+            use_container_width=True,
+            hide_index=True
+        )
+        
+        if st.button("⬅️ Voltar ao Painel Principal"):
+            st.session_state["view_mode"] = "Painel Principal"
+            st.rerun()
+            
+    else:
+        st.markdown("### 🔍 Pesquisa Rápida de AWB")
+        busca_global = st.text_input("Digite o número da AWB para localizar instantaneamente:", placeholder="Ex: 3320108174832")
+        
+        if busca_global:
+            df_resultado_busca = df_display[df_display['Número AWB'].astype(str).str.contains(busca_global, case=False, na=False)]
+            if len(df_resultado_busca) > 0:
+                st.success(f"Encontrado(s) {len(df_resultado_busca)} registo(s) para a AWB pesquisada:")
+                st.dataframe(
+                    df_resultado_busca[['Número AWB', 'Nome do Motorista', 'Status do Registro', 'Faixa D0-D3', 'Dias em Rota', 'Cidade Destino', 'Última Movimentação', 'Data/Hora Último Scan']],
+                    use_container_width=True,
+                    hide_index=True
+                )
+            else:
+                st.warning("Nenhuma AWB encontrada com este número no histórico.")
+            st.markdown("---")
+
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Total de AWBs", len(df_display))
+        col2.metric("Motoristas Ativos", df_display[df_display['Nome do Motorista'] != 'Sem Motorista Atribuído']['Nome do Motorista'].nunique())
+        col3.metric("Média de Dias em Rota", f"{df_display['Dias em Rota'].mean():.1f} dias")
+        col4.metric("AWBs Críticas (>3 dias)", len(df_criticas))
+        
+        st.markdown("---")
+
+        st.subheader("⏱️ Distribuição de Entregas por Antiguidade (Aging D0 a >D3)")
+        
+        c_d0, c_d1, c_d2, c_d3, c_d_critico = st.columns(5)
+        c_d0.metric("D0 (0 Dias)", len(df_display[df_display['Faixa D0-D3'] == 'D0']))
+        c_d1.metric("D1 (1 Dia)", len(df_display[df_display['Faixa D0-D3'] == 'D1']))
+        c_d2.metric("D2 (2 Dias)", len(df_display[df_display['Faixa D0-D3'] == 'D2']))
+        c_d3.metric("D3 (3 Dias)", len(df_display[df_display['Faixa D0-D3'] == 'D3']))
+        c_d_critico.metric("> D3 (Críticas)", len(df_display[df_display['Faixa D0-D3'] == '> D3']))
+
+        with st.expander("📋 Filtrar Tabela por Faixa de Aging (D0, D1, D2, D3, >D3)"):
+            faixas_selecionadas = st.multiselect(
+                "Selecione a(s) faixa(s) que pretende visualizar:",
+                options=['D0', 'D1', 'D2', 'D3', '> D3'],
+                default=['D0', 'D1', 'D2', 'D3', '> D3']
+            )
+            if faixas_selecionadas:
+                df_aging_filtrado = df_display[df_display['Faixa D0-D3'].isin(faixas_selecionadas)]
+                st.dataframe(
+                    df_aging_filtrado[['Número AWB', 'Nome do Motorista', 'Faixa D0-D3', 'Dias em Rota', 'Status do Registro', 'Cidade Destino', 'Última Movimentação', 'Data/Hora Último Scan']],
+                    use_container_width=True,
+                    hide_index=True
+                )
+
+        st.markdown("---")
+        st.subheader("📊 Análise Visual & Detalhamento por Motorista")
+        
+        tab1, tab2, tab3, tab4 = st.tabs([
+            "AWBs em Aberto por Motorista", 
+            "Volume Total de AWBs por Motorista", 
+            "Média de Dias em Rota por Motorista",
+            "Aging por Motorista (D0 a >D3)"
+        ])
+        
+        df_motoristas = df_display[df_display['Nome do Motorista'] != 'Sem Motorista Atribuído']
+        
+        with tab1:
+            df_aberto = df_motoristas[df_motoristas['Status do Registro'].str.lower() == 'em aberto']
+            awb_aberto_per_driver = df_aberto['Nome do Motorista'].value_counts().reset_index()
+            awb_aberto_per_driver.columns = ['Nome do Motorista', 'AWBs em Aberto']
+            
+            fig0 = px.bar(
+                awb_aberto_per_driver, 
+                x='Nome do Motorista', 
+                y='AWBs em Aberto',
+                text='AWBs em Aberto',
+                title="Quantidade de AWBs 'Em
