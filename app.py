@@ -28,7 +28,6 @@ def tratar_dataframe(df_raw):
     df = df_raw.copy()
     df.columns = df.columns.str.strip()
     
-    # Mapeamento robusto para a nova estrutura de colunas
     if 'Número da Etiqueta' in df.columns:
         df['Número AWB'] = df['Número da Etiqueta'].astype(str)
     elif 'Waybill No' in df.columns:
@@ -249,6 +248,12 @@ if df is not None:
     cols_existentes = [c for c in cols_desejadas if c in df.columns]
     df_display = df[cols_existentes]
 
+    # --- CÁLCULOS GLOBAIS ANTES DOS FILTROS ---
+    total_geral = len(df_display)
+    total_entregue = len(df_display[df_display['Último Status'].str.lower() == 'entregue']) if 'Último Status' in df_display.columns else 0
+    total_em_rota = len(df_display[df_display['Último Status'].str.lower() == 'em rota de entrega']) if 'Último Status' in df_display.columns else 0
+    total_insucesso = total_geral - (total_entregue + total_em_rota)
+
     # --- FILTROS NA SIDEBAR ---
     st.sidebar.markdown("---")
     st.sidebar.subheader("Filtros Globais")
@@ -275,13 +280,7 @@ if df is not None:
         if status_selecionados:
             df_display = df_display[df_display['Último Status'].isin(status_selecionados)]
 
-    total_geral = len(df_display)
-    
-    if total_geral > 0 and 'Último Status' in df_display.columns:
-        total_entregue = len(df_display[df_display['Último Status'].str.lower() == 'entregue'])
-        total_em_rota = len(df_display[df_display['Último Status'].str.lower() == 'em rota de entrega'])
-        total_insucesso = total_geral - (total_entregue + total_em_rota)
-
+    if total_geral > 0:
         pct_entregue = (total_entregue / total_geral) * 100
         pct_em_rota = (total_em_rota / total_geral) * 100
         pct_insucesso = (total_insucesso / total_geral) * 100
@@ -303,8 +302,8 @@ if df is not None:
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Total de Pacotes", total_geral)
     col2.metric("Motoristas Ativos", df_display[df_display['Nome do Motorista'] != 'Sem Motorista Atribuido']['Nome do Motorista'].nunique() if 'Nome do Motorista' in df_display.columns else 0)
-    col3.metric("Entregues", total_entregue if total_geral > 0 else 0)
-    col4.metric("Em Rota de Entrega", total_em_rota if total_geral > 0 else 0)
+    col3.metric("Entregues", total_entregue)
+    col4.metric("Em Rota de Entrega", total_em_rota)
     
     st.markdown("---")
     st.markdown("### 🔍 Pesquisa Rápida de AWB")
