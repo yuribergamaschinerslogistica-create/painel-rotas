@@ -241,4 +241,209 @@ else:
     if st.session_state["user_info"]["role"] == "Supervisor":
         col_up1, col_up2 = st.columns([3, 1])
         with col_up1:
-            uploaded_file = st.file_uploader("Faca o upload da nova planilha (.xlsx
+            uploaded_file = st.file_uploader("Faca o upload da nova planilha (.xlsx)", type=["xlsx", "xls"])
+            if uploaded_file is not None:
+                try:
+                    df_raw = pd.read_excel(uploaded_file, sheet_name=0)
+                    df_tratado = tratar_dataframe(df_raw)
+                    df_tratado.to_excel(DATA_FILE, index=False)
+                    st.success("Planilha carregada com sucesso!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erro ao processar o ficheiro: {e}")
+        
+        with col_up2:
+            st.write("")
+            st.write("")
+            with st.expander("🔒 Encerrar o Dia / Arquivar"):
+                with st.form("form_arquivar_dia"):
+                    st.warning("Esta acao vai arquivar o dia atual e limpar a tela para o dia seguinte.")
+                    senha_confirmacao = st.text_input("Digite a sua senha para confirmar:", type="password")
+                    btn_confirma_arq = st.form_submit_button("Confirmar Fechamento")
+                    
+                    if btn_confirma_arq:
+                        user_key = st.session_state.get("username_key", "")
+                        if user_key in users_db and users_db[user_key]["password"] == senha_confirmacao:
+                            if os.path.exists(DATA_FILE):
+                                data_hoje = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                                destino_hist = os.path.join(HISTORY_DIR, f"fechamento_{data_hoje}.xlsx")
+                                os.rename(DATA_FILE, destino_hist)
+                                st.success("Dia encerrado! Dados arquivados com sucesso e sistema zerado.")
+                                st.rerun()
+                            else:
+                                st.warning("Não há dados ativos para arquivar.")
+                        else:
+                            st.error("Senha incorreta. Fechamento cancelado.")
+
+    df = None
+    if os.path.exists(DATA_FILE):
+        try:
+            df = pd.read_excel(DATA_FILE)
+            if 'Data/Hora Última Leitura' in df.columns:
+                df['Data/Hora Última Leitura'] = pd.to_datetime(df['Data/Hora Última Leitura'], errors='coerce')
+            if 'Hora de Criação' in df.columns:
+                df['Hora de Criação'] = pd.to_datetime(df['Hora de Criação'], errors='coerce')
+        except Exception:
+            df = None
+
+    if df is not None and not df.empty:
+        cols_desejadas = ['Número AWB', 'Nome do Motorista', 'Último Status', 'Cidade Destino', 'Data/Hora Última Leitura', 'Hora de Criação']
+        cols_existentes = [c for c in cols_desejadas if c in df.columns]
+        df_display = df[cols_existentes]
+
+        total_geral = len(df_display)
+        total_entregue = len(df_display[df_display['Último Status'].str.lower() == 'entregue']) if 'Último Status' in df_display.columns else 0
+        total_em_rota = len(df_display[df_display['Último Status'].str.lower() == 'em rota de entrega']) if 'Último Status' in df_display.columns else 0
+        total_insucesso = total_geral - (total_entregue + total_em_rota)
+        
+        sla_geral = (total_entregue / total_geral * 100) if total_geral > 0 else 0.0
+        otif = (total_entregue / total_geral * 100) if total_geral > 0 else 0.0
+
+        oct_medio = 0.0
+        if 'Hora de Criação' in df.columns and 'Data/Hora Última Leitura' in df.columns:
+            df_entregues_oct = df[(df['Último Status'].str.lower() == 'entregue') & df['Hora de Criação'].notna() & df['Data/Hora Última Leitura'].notna()]
+            if not df_entregues_oct.empty:
+                diferencas = (df_entregues_oct['Data/Hora Última Leitura'] - df_entregues_oct['Hora de Criação']).dt.total_seconds() / 86400.0
+                oct_medio = diferencas.mean()
+
+        # --- TELA: PAINEL POR MOTORISTA ---
+        if st.session_state["view_mode"] == "Painel Motoristas":
+            st.subheader("Painel Individual por Motorista")
+            st.markdown("Pesquise pelo nome do motorista ou clique nos status para detalhar as AWBs:")
+            
+            busca_motorista = st.text_input("🔍 Digite o nome do motorista para localizar:", placeholder="Ex: Rodrigo")
+            st.markdown("---")
+
+            df_motoristas = df_display[df_display['Nome do Motorista'] != 'Sem Motorista Atribuido']
+            
+            if busca_motorista:
+                df_motoristas = df_motoristas[df_motoristas['Nome do Motorista'].astype(str).str.contains(busca_motorista, case=False, na=False)]
+
+            lista_motoristas = sorted(df_motoristas['Nome do Motorista'].unique().tolist())
+
+            if lista_motoristas:
+                cols_per_row = 3
+                for i in range(0, len(lista_motoristas), cols_per_row):
+                    row_cols = st.columns(cols_per_row)
+                    for j in range(cols_per_row):
+                        if i + j < len(lista_motoristas):
+                            motorista = lista_motoristas[i + j]
+                            df_mot = df_motoristas[df_motoristas['Nome do Motorista'] == motorista]
+                            
+                            m_entregue = len(df_mot[df_mot['Último Status'].str.lower() == 'entregue'])
+                            m_em_rota = len(df_mot[df_mot['Último Status'].str.lower() == 'em rota de entrega'])
+                            m_anormal = len(df_mot) - (m_entregue + m_em_rota)
+                            
+                            with row_cols[j]:
+                                with st.container(border=True):
+                                    st.markdown(f"**{motorista}**")
+                                    
+                                    df_pie = pd.DataFrame({
+                                        'Status': ['Entregue', 'Em rota', 'Outros/Anormal'],
+                                        'Quantidade': [m_entregue, m_em_rota, m_anormal]
+                                    })
+                                    fig_donut = px.pie(
+                                        df_pie, 
+                                        names='Status', 
+                                        values='Quantidade', 
+                                        hole=0.6,
+                                        color='Status',
+                                        color_discrete_map={
+                                            'Entregue': '#28a745', 
+                                            'Em rota': '#ffc107', 
+                                            'Outros/Anormal': '#dc3545'
+                                        }
+                                    )
+                                    fig_donut.update_traces(textinfo='value', textfont_size=12, showlegend=False)
+                                    fig_donut.update_layout(
+                                        margin=dict(t=5, b=5, l=5, r=5),
+                                        height=180,
+                                        paper_bgcolor='rgba(0,0,0,0)',
+                                        plot_bgcolor='rgba(0,0,0,0)'
+                                    )
+                                    st.plotly_chart(fig_donut, use_container_width=True, key=f"donut_{i+j}")
+                                    
+                                    status_clique = st.selectbox(
+                                        f"Ver AWBs de {motorista}:",
+                                        options=["Selecionar...", "Entregue", "Em rota de entrega", "Outros/Anormal"],
+                                        key=f"sel_{i+j}"
+                                    )
+                                    
+                                    if status_clique == "Entregue":
+                                        df_detalhe = df_mot[df_mot['Último Status'].str.lower() == 'entregue']
+                                        st.dataframe(df_detalhe[['Número AWB', 'Último Status', 'Cidade Destino']], use_container_width=True, hide_index=True)
+                                    elif status_clique == "Em rota de entrega":
+                                        df_detalhe = df_mot[df_mot['Último Status'].str.lower() == 'em rota de entrega']
+                                        st.dataframe(df_detalhe[['Número AWB', 'Último Status', 'Cidade Destino']], use_container_width=True, hide_index=True)
+                                    elif status_clique == "Outros/Anormal":
+                                        df_detalhe = df_mot[~df_mot['Último Status'].str.lower().isin(['entregue', 'em rota de entrega'])]
+                                        st.dataframe(df_detalhe[['Número AWB', 'Último Status', 'Cidade Destino']], use_container_width=True, hide_index=True)
+            else:
+                st.info("Nenhum motorista encontrado com este nome.")
+
+            st.markdown("---")
+            if st.button("Voltar ao Painel Principal"):
+                st.session_state["view_mode"] = "Painel Principal"
+                st.rerun()
+
+        else:
+            # --- FILTROS NA SIDEBAR ---
+            st.sidebar.markdown("---")
+            st.sidebar.subheader("Filtros Globais")
+
+            if 'Cidade Destino' in df_display.columns:
+                cidades_disponiveis = sorted(df_display['Cidade Destino'].astype(str).unique().tolist())
+                cidades_selecionadas = st.sidebar.multiselect(
+                    "Cidade Destino:",
+                    options=cidades_disponiveis,
+                    default=cidades_disponiveis
+                )
+                if cidades_selecionadas:
+                    df_display = df_display[df_display['Cidade Destino'].isin(cidades_selecionadas)]
+
+            if 'Último Status' in df_display.columns:
+                status_disponiveis = sorted(df_display['Último Status'].astype(str).unique().tolist())
+                status_selecionados = st.sidebar.multiselect(
+                    "Último Status:",
+                    options=status_disponiveis,
+                    default=status_disponiveis
+                )
+                if status_selecionados:
+                    df_display = df_display[df_display['Último Status'].isin(status_selecionados)]
+
+            if total_geral > 0:
+                st.subheader("Progresso Geral das Entregas")
+                col_p1, col_p2, col_p3 = st.columns(3)
+                col_p1.metric("Entregues", f"{total_entregue} ({pct_entregue:.1f}%)")
+                col_p2.metric("Em Rota", f"{total_em_rota} ({pct_em_rota:.1f}%)")
+                col_p3.metric("Outros/Insucesso", f"{total_insucesso} ({pct_insucesso:.1f}%)")
+                st.markdown("---")
+
+            col1, col2, col3, col4, col5, col6, col7 = st.columns(7)
+            col1.metric("Total de Pacotes", total_geral)
+            col2.metric("Motoristas Ativos", df_display[df_display['Nome do Motorista'] != 'Sem Motorista Atribuido']['Nome do Motorista'].nunique() if 'Nome do Motorista' in df_display.columns else 0)
+            col3.metric("Entregues", total_entregue)
+            col4.metric("Em Rota de Entrega", total_em_rota)
+            col5.metric("SLA Geral", f"{sla_geral:.1f}%")
+            col6.metric("OTIF", f"{otif:.1f}%")
+            col7.metric("OCT Médio", f"{oct_medio:.1f} dias")
+            
+            st.markdown("---")
+            st.subheader("Pesquisa de AWB")
+            busca_global = st.text_input("Digite o numero da AWB:", placeholder="Ex: 3320184118564")
+            
+            if busca_global and 'Número AWB' in df_display.columns:
+                df_resultado_busca = df_display[df_display['Número AWB'].astype(str).str.contains(busca_global, case=False, na=False)]
+                if len(df_resultado_busca) > 0:
+                    st.success(f"Encontrado(s) {len(df_resultado_busca)} registo(s):")
+                    st.dataframe(df_resultado_busca, use_container_width=True, hide_index=True)
+                else:
+                    st.warning("Nenhuma AWB encontrada.")
+                st.markdown("---")
+
+            st.subheader("Tabela de Acompanhamento")
+            st.dataframe(df_display, use_container_width=True, hide_index=True)
+
+        st.markdown("---")
+    else:
+        st.info("Aguardando o supervisor carregar a nova planilha (.xlsx) para iniciar o dia.")
