@@ -336,40 +336,4 @@ if df is not None:
         c_d3.metric("D3 (3 Dias)", len(df_display[df_display['Faixa D0-D3'] == 'D3']))
         c_d_critico.metric("> D3 (Críticas)", len(df_display[df_display['Faixa D0-D3'] == '> D3']))
 
-        with st.expander("📋 Filtrar Tabela por Faixa de Aging (D0, D1, D2, D3, >D3)"):
-            faixas_selecionadas = st.multiselect(
-                "Selecione a(s) faixa(s) que pretende visualizar:",
-                options=['D0', 'D1', 'D2', 'D3', '> D3'],
-                default=['D0', 'D1', 'D2', 'D3', '> D3']
-            )
-            if faixas_selecionadas:
-                df_aging_filtrado = df_display[df_display['Faixa D0-D3'].isin(faixas_selecionadas)]
-                st.dataframe(
-                    df_aging_filtrado[['Número AWB', 'Nome do Motorista', 'Faixa D0-D3', 'Dias em Rota', 'Status do Registro', 'Cidade Destino', 'Última Movimentação', 'Data/Hora Último Scan']],
-                    use_container_width=True,
-                    hide_index=True
-                )
-
-        st.markdown("---")
-        st.subheader("📊 Análise Visual & Detalhamento por Motorista")
-        
-        tab1, tab2, tab3, tab4 = st.tabs([
-            "AWBs em Aberto por Motorista", 
-            "Volume Total de AWBs por Motorista", 
-            "Média de Dias em Rota por Motorista",
-            "Aging por Motorista (D0 a >D3)"
-        ])
-        
-        df_motoristas = df_display[df_display['Nome do Motorista'] != 'Sem Motorista Atribuído']
-        
-        with tab1:
-            df_aberto = df_motoristas[df_motoristas['Status do Registro'].str.lower() == 'em aberto']
-            awb_aberto_per_driver = df_aberto['Nome do Motorista'].value_counts().reset_index()
-            awb_aberto_per_driver.columns = ['Nome do Motorista', 'AWBs em Aberto']
-            
-            fig0 = px.bar(
-                awb_aberto_per_driver, 
-                x='Nome do Motorista', 
-                y='AWBs em Aberto',
-                text='AWBs em Aberto',
-                title="Quantidade de AWBs 'Em
+        with st.exp
