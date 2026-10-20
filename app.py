@@ -145,41 +145,4 @@ if not st.session_state["logged_in"]:
                     else:
                         st.error("Utilizador não encontrado.")
             
-            if st.button("⬅️ Voltar ao Login"):
-                st.session_state["auth_mode"] = "login"
-                st.rerun()
-                
-    st.stop()
-
-# --- SIDEBAR ---
-st.sidebar.title(f"👤 {st.session_state['user_info']['name']}")
-st.sidebar.caption(f"Perfil: {st.session_state['user_info']['role']}")
-
-if st.sidebar.button("🚪 Sair / Logout"):
-    st.session_state["logged_in"] = False
-    st.session_state["user_info"] = None
-    st.session_state["view_mode"] = "Painel Principal"
-    st.rerun()
-
-st.sidebar.markdown("---")
-st.sidebar.subheader("📌 Navegação")
-if st.sidebar.button("📊 Ver Painel Principal"):
-    st.session_state["view_mode"] = "Painel Principal"
-    st.rerun()
-
-if st.sidebar.button("🚨 Ver AWBs Críticas em Destaque"):
-    st.session_state["view_mode"] = "AWBs Criticas"
-    st.rerun()
-
-st.sidebar.markdown("---")
-
-if st.session_state["user_info"]["role"] == "Supervisor":
-    with st.sidebar.expander("➕ Cadastrar Novo Utilizador"):
-        with st.form("new_user_form"):
-            new_username = st.text_input("Login (Utilizador)")
-            new_name = st.text_input("Nome Completo")
-            new_email = st.text_input("Email")
-            new_phone = st.text_input("Telefone")
-            new_password = st.text_input("Senha Inicial", type="password")
-            new_role = st.selectbox("Perfil de Acesso", ["Operador", "Supervisor"])
-            create_btn =
+            if st.button("⬅️ Voltar ao Login
