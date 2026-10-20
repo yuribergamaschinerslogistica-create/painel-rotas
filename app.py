@@ -212,17 +212,26 @@ else:
                         else:
                             st.error("Senha incorreta.")
 
-    if df is None and os.path.exists(DATA_FILE):
-        try:
-            df = pd.read_excel(DATA_FILE)
-            if 'Data/Hora Última Leitura' in df.columns:
-                df['Data/Hora Última Leitura'] = pd.to_datetime(df['Data/Hora Última Leitura'], errors='coerce')
-            if 'Hora de Criação' in df.columns:
-                df['Hora de Criação'] = pd.to_datetime(df['Hora de Criação'], errors='coerce')
-        except:
-            df = None
+    # Se não carregou agora, tenta ler o ficheiro específico da transportadora
+    if df is None:
+        if os.path.exists(DATA_FILE):
+            try:
+                df = pd.read_excel(DATA_FILE)
+            except:
+                df = None
+        # Fallback de compatibilidade caso exista o ficheiro antigo unificado
+        elif os.path.exists("dados_atuais.xlsx"):
+            try:
+                df = pd.read_excel("dados_atuais.xlsx")
+            except:
+                df = None
 
     if df is not None and not df.empty:
+        if 'Data/Hora Última Leitura' in df.columns:
+            df['Data/Hora Última Leitura'] = pd.to_datetime(df['Data/Hora Última Leitura'], errors='coerce')
+        if 'Hora de Criação' in df.columns:
+            df['Hora de Criação'] = pd.to_datetime(df['Hora de Criação'], errors='coerce')
+
         cols = ['Número AWB', 'Nome do Motorista', 'Último Status', 'Cidade Destino', 'Data/Hora Última Leitura', 'Hora de Criação']
         df_display = df[[c for c in cols if c in df.columns]]
 
@@ -294,3 +303,51 @@ else:
                                     fig.update_layout(margin=dict(t=5, b=5, l=5, r=5), height=160, paper_bgcolor='rgba(0,0,0,0)')
                                     st.plotly_chart(fig, use_container_width=True, key=f"d_{transp_atual}_{i+j}")
                                     st.write(f"Entregues: {m_ent} | Rota: {m_rot} | Outros: {m_out}")
+            else:
+                st.info("Nenhum motorista encontrado.")
+
+            st.markdown("---")
+            if st.button("Voltar"):
+                st.session_state["view_mode"] = "Painel Principal"
+                st.rerun()
+        else:
+            if total_geral > 0:
+                st.subheader(f"Progresso Geral - {transp_atual}")
+                st.markdown(
+                    f"""
+                    <div style="background-color: #ddd; border-radius: 8px; overflow: hidden; display: flex; height: 28px; width: 100%;">
+                        <div style="width: {pct_entregue}%; background-color: #28a745; text-align: center; color: white; font-weight: bold; line-height: 28px; font-size: 13px;">Entregue: {pct_entregue:.1f}%</div>
+                        <div style="width: {pct_em_rota}%; background-color: #ffc107; text-align: center; color: black; font-weight: bold; line-height: 28px; font-size: 13px;">Em rota: {pct_em_rota:.1f}%</div>
+                        <div style="width: {pct_insucesso}%; background-color: #dc3545; text-align: center; color: white; font-weight: bold; line-height: 28px; font-size: 13px;">Outros: {pct_insucesso:.1f}%</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+                st.caption(f"Total: {total_geral} pacotes | Entregues: {total_entregue} | Em Rota: {total_em_rota} | Outros: {total_insucesso}")
+                st.markdown("---")
+
+            c1, c2, c3, c4, c5, c6, c7 = st.columns(7)
+            c1.metric("Total", total_geral)
+            c2.metric("Motoristas", df_display[df_display['Nome do Motorista'] != 'Sem Motorista Atribuido']['Nome do Motorista'].nunique())
+            c3.metric("Entregues", total_entregue)
+            c4.metric("Em Rota", total_em_rota)
+            c5.metric("SLA", f"{sla_geral:.1f}%")
+            c6.metric("OTIF", f"{otif:.1f}%")
+            c7.metric("OCT", f"{oct_medio:.1f} dias")
+            
+            st.markdown("---")
+            st.subheader("Pesquisa AWB")
+            b_global = st.text_input("Número da AWB:", key=f"search_{transp_atual}")
+            if b_global:
+                df_res = df_display[df_display['Número AWB'].astype(str).str.contains(b_global, case=False, na=False)]
+                if not df_res.empty:
+                    st.success(f"{len(df_res)} registo(s) encontrado(s):")
+                    st.dataframe(df_res, use_container_width=True, hide_index=True)
+                else:
+                    st.warning("Não encontrado.")
+                st.markdown("---")
+
+            st.subheader(f"Tabela de Acompanhamento - {transp_atual}")
+            st.dataframe(df_display, use_container_width=True, hide_index=True)
+    else:
+        st.info(f"Aguardando carregamento da planilha da **{transp_atual}** para iniciar o dia.")
