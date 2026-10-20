@@ -355,7 +355,7 @@ else:
                 st.markdown("---")
 
             st.subheader("Tabela de Acompanhamento com Cópia Rápida")
-            st.markdown("Clique no botão 📋 ao lado de qualquer AWB para copiá-la instantaneamente:")
+            st.markdown("Clique no botão 📋 ao lado de qualquer AWB para copiar **apenas o número** instantaneamente:")
             
             for index, row in df_display.iterrows():
                 awb_val = str(row['Número AWB'])
