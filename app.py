@@ -246,13 +246,15 @@ if df is not None and not df.empty:
     total_entregue = len(df_display[df_display['Último Status'].str.lower() == 'entregue']) if 'Último Status' in df_display.columns else 0
     total_em_rota = len(df_display[df_display['Último Status'].str.lower() == 'em rota de entrega']) if 'Último Status' in df_display.columns else 0
     total_insucesso = total_geral - (total_entregue + total_em_rota)
+    
+    # Cálculo do SLA Geral (Percentagem de Entregues sobre o Total)
+    sla_geral = (total_entregue / total_geral * 100) if total_geral > 0 else 0.0
 
     # --- TELA: PAINEL POR MOTORISTA COM BUSCA E FILTRO DE STATUS ---
     if st.session_state["view_mode"] == "Painel Motoristas":
         st.subheader("Painel Individual por Motorista")
         st.markdown("Pesquise pelo nome do motorista ou clique nos status para detalhar as AWBs:")
         
-        # Campo de busca por motorista
         busca_motorista = st.text_input("🔍 Digite o nome do motorista para localizar:", placeholder="Ex: Rodrigo")
         st.markdown("---")
 
@@ -305,7 +307,6 @@ if df is not None and not df.empty:
                                 )
                                 st.plotly_chart(fig_donut, use_container_width=True, key=f"donut_{i+j}")
                                 
-                                # Seletor interativo de status para ver as AWBs daquele motorista
                                 status_clique = st.selectbox(
                                     f"Ver AWBs de {motorista}:",
                                     options=["Selecionar...", "Entregue", "Em rota de entrega", "Outros/Anormal"],
@@ -357,44 +358,3 @@ if df is not None and not df.empty:
         if total_geral > 0:
             pct_entregue = (total_entregue / total_geral) * 100
             pct_em_rota = (total_em_rota / total_geral) * 100
-            pct_insucesso = (total_insucesso / total_geral) * 100
-
-            st.subheader("Progresso Geral das Entregas")
-            st.markdown(
-                f"""
-                <div style="background-color: #ddd; border-radius: 8px; overflow: hidden; display: flex; height: 28px; width: 100%;">
-                    <div style="width: {pct_entregue}%; background-color: #28a745; text-align: center; color: white; font-weight: bold; line-height: 28px; font-size: 13px;" title="Entregue: {total_entregue}">Entregue: {pct_entregue:.1f}%</div>
-                    <div style="width: {pct_em_rota}%; background-color: #ffc107; text-align: center; color: black; font-weight: bold; line-height: 28px; font-size: 13px;" title="Em rota: {total_em_rota}">Em rota: {pct_em_rota:.1f}%</div>
-                    <div style="width: {pct_insucesso}%; background-color: #dc3545; text-align: center; color: white; font-weight: bold; line-height: 28px; font-size: 13px;" title="Outros: {total_insucesso}">Outros: {pct_insucesso:.1f}%</div>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-            st.caption(f"Total: {total_geral} pacotes | Entregues: {total_entregue} | Em Rota: {total_em_rota} | Outros: {total_insucesso}")
-            st.markdown("---")
-
-        col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Total de Pacotes", total_geral)
-        col2.metric("Motoristas Ativos", df_display[df_display['Nome do Motorista'] != 'Sem Motorista Atribuido']['Nome do Motorista'].nunique() if 'Nome do Motorista' in df_display.columns else 0)
-        col3.metric("Entregues", total_entregue)
-        col4.metric("Em Rota de Entrega", total_em_rota)
-        
-        st.markdown("---")
-        st.subheader("Pesquisa de AWB")
-        busca_global = st.text_input("Digite o numero da AWB:", placeholder="Ex: 3320184118564")
-        
-        if busca_global and 'Número AWB' in df_display.columns:
-            df_resultado_busca = df_display[df_display['Número AWB'].astype(str).str.contains(busca_global, case=False, na=False)]
-            if len(df_resultado_busca) > 0:
-                st.success(f"Encontrado(s) {len(df_resultado_busca)} registo(s):")
-                st.dataframe(df_resultado_busca, use_container_width=True, hide_index=True)
-            else:
-                st.warning("Nenhuma AWB encontrada.")
-            st.markdown("---")
-
-        st.subheader("Tabela de Acompanhamento")
-        st.dataframe(df_display, use_container_width=True, hide_index=True)
-
-    st.markdown("---")
-else:
-    st.info("Aguardando o supervisor carregar a nova planilha (.xlsx).")
