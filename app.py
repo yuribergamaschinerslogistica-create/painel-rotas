@@ -98,7 +98,7 @@ if "view_mode" not in st.session_state:
 if "auth_mode" not in st.session_state:
     st.session_state["auth_mode"] = "login"
 
-# --- TELA DE LOGIN / RECUPERACAO ---
+# --- TELA DE LOGIN ---
 if not st.session_state["logged_in"]:
     st.title("Acesso - Painel de Rotas")
     st.markdown("---")
@@ -142,7 +142,7 @@ if not st.session_state["logged_in"]:
                             st.session_state["auth_mode"] = "login"
                             st.rerun()
                         else:
-                            st.error("O email informado nao confere com o registo deste utilizador.")
+                            st.error("O email informado nao confere com o registo.")
                     else:
                         st.error("Utilizador nao encontrado.")
             
@@ -168,11 +168,11 @@ if st.sidebar.button("Ver Painel Principal"):
     st.session_state["view_mode"] = "Painel Principal"
     st.rerun()
 
-if st.sidebar.button("Ver Painel Individual por Motorista"):
+if st.sidebar.button("Ver Painel por Motorista"):
     st.session_state["view_mode"] = "Painel Motoristas"
     st.rerun()
 
-if st.sidebar.button("Ver AWBs Criticas em Destaque"):
+if st.sidebar.button("Ver AWBs Criticas"):
     st.session_state["view_mode"] = "AWBs Criticas"
     st.rerun()
 
@@ -186,7 +186,7 @@ if st.session_state["user_info"]["role"] == "Supervisor":
             new_email = st.text_input("Email")
             new_phone = st.text_input("Telefone")
             new_password = st.text_input("Senha Inicial", type="password")
-            new_role = st.selectbox("Perfil de Acesso", ["Operador", "Supervisor"])
+            new_role = st.selectbox("Perfil", ["Operador", "Supervisor"])
             create_btn = st.form_submit_button("Guardar Utilizador")
             
             if create_btn:
@@ -201,7 +201,7 @@ if st.session_state["user_info"]["role"] == "Supervisor":
                     save_users(users_db)
                     st.success(f"Utilizador '{new_username}' cadastrado com sucesso!")
                 else:
-                    st.warning("Preencha os campos obrigatorios (Login, Nome, Email e Senha).")
+                    st.warning("Preencha os campos obrigatorios.")
 
 st.title("Painel de Acompanhamento Diario - Rotas e AWBs")
 st.markdown("---")
@@ -209,23 +209,23 @@ st.markdown("---")
 if st.session_state["user_info"]["role"] == "Supervisor":
     col_up1, col_up2 = st.columns([3, 1])
     with col_up1:
-        uploaded_file = st.file_uploader("Faca o upload da nova planilha (.xlsx) para partilhar com a equipa", type=["xlsx", "xls"])
+        uploaded_file = st.file_uploader("Faca o upload da nova planilha (.xlsx) para partilhar", type=["xlsx", "xls"])
         if uploaded_file is not None:
             try:
                 df_raw = pd.read_excel(uploaded_file, sheet_name=0)
                 df_tratado = tratar_dataframe(df_raw)
                 df_tratado.to_excel(DATA_FILE, index=False)
-                st.success("Planilha carregada e partilhada com todos os utilizadores online!")
+                st.success("Planilha carregada e partilhada com todos!")
                 st.rerun()
             except Exception as e:
-                st.error(f"Erro ao processar o ficheiro Excel: {e}")
+                st.error(f"Erro ao processar o ficheiro: {e}")
     with col_up2:
         st.write("")
         st.write("")
-        if st.button("Limpar Dados Partilhados"):
+        if st.button("Limpar Dados"):
             if os.path.exists(DATA_FILE):
                 os.remove(DATA_FILE)
-            st.success("Dados limpos para toda a equipa!")
+            st.success("Dados limpos!")
             st.rerun()
 
 df = None
@@ -242,13 +242,138 @@ if df is not None and not df.empty:
     cols_existentes = [c for c in cols_desejadas if c in df.columns]
     df_display = df[cols_existentes]
 
-    # --- CÁLCULOS GLOBAIS ---
     total_geral = len(df_display)
     total_entregue = len(df_display[df_display['Último Status'].str.lower() == 'entregue']) if 'Último Status' in df_display.columns else 0
     total_em_rota = len(df_display[df_display['Último Status'].str.lower() == 'em rota de entrega']) if 'Último Status' in df_display.columns else 0
     total_insucesso = total_geral - (total_entregue + total_em_rota)
 
-    # --- TELA: PAINEL INDIVIDUAL POR MOTORISTA ---
+    # --- TELA: PAINEL POR MOTORISTA (ESTILO CARTÕES COM ROSCA) ---
     if st.session_state["view_mode"] == "Painel Motoristas":
-        st.subheader("👤 Painel Individual por Motorista")
-        st.markdown("Acompanhamento do status de entregas por cada motorista em formato de cart
+        st.subheader("Painel Individual por Motorista")
+        st.markdown("Acompanhamento de entregas por cada motorista:")
+        st.markdown("---")
+
+        df_motoristas = df_display[df_display['Nome do Motorista'] != 'Sem Motorista Atribuido']
+        lista_motoristas = sorted(df_motoristas['Nome do Motorista'].unique().tolist())
+
+        if lista_motoristas:
+            cols_per_row = 3
+            for i in range(0, len(lista_motoristas), cols_per_row):
+                row_cols = st.columns(cols_per_row)
+                for j in range(cols_per_row):
+                    if i + j < len(lista_motoristas):
+                        motorista = lista_motoristas[i + j]
+                        df_mot = df_motoristas[df_motoristas['Nome do Motorista'] == motorista]
+                        
+                        m_entregue = len(df_mot[df_mot['Último Status'].str.lower() == 'entregue'])
+                        m_em_rota = len(df_mot[df_mot['Último Status'].str.lower() == 'em rota de entrega'])
+                        m_anormal = len(df_mot) - (m_entregue + m_em_rota)
+                        
+                        with row_cols[j]:
+                            with st.container(border=True):
+                                st.markdown(f"**{motorista}**")
+                                
+                                df_pie = pd.DataFrame({
+                                    'Status': ['Entregue', 'Em rota', 'Outros/Anormal'],
+                                    'Quantidade': [m_entregue, m_em_rota, m_anormal]
+                                })
+                                fig_donut = px.pie(
+                                    df_pie, 
+                                    names='Status', 
+                                    values='Quantidade', 
+                                    hole=0.6,
+                                    color='Status',
+                                    color_discrete_map={
+                                        'Entregue': '#28a745', 
+                                        'Em rota': '#ffc107', 
+                                        'Outros/Anormal': '#dc3545'
+                                    }
+                                )
+                                fig_donut.update_traces(textinfo='value', textfont_size=12, showlegend=False)
+                                fig_donut.update_layout(
+                                    margin=dict(t=5, b=5, l=5, r=5),
+                                    height=180,
+                                    paper_bgcolor='rgba(0,0,0,0)',
+                                    plot_bgcolor='rgba(0,0,0,0)'
+                                )
+                                st.plotly_chart(fig_donut, use_container_width=True, key=f"donut_{i+j}")
+                                
+                                st.write(f"Entregue: {m_entregue}")
+                                st.write(f"Em rota: {m_em_rota}")
+                                st.write(f"Outros/Anormal: {m_anormal}")
+        else:
+            st.info("Nenhum motorista encontrado.")
+
+        if st.button("Voltar ao Painel Principal"):
+            st.session_state["view_mode"] = "Painel Principal"
+            st.rerun()
+
+    else:
+        # --- FILTROS NA SIDEBAR ---
+        st.sidebar.markdown("---")
+        st.sidebar.subheader("Filtros Globais")
+
+        if 'Cidade Destino' in df_display.columns:
+            cidades_disponiveis = sorted(df_display['Cidade Destino'].astype(str).unique().tolist())
+            cidades_selecionadas = st.sidebar.multiselect(
+                "Cidade Destino:",
+                options=cidades_disponiveis,
+                default=cidades_disponiveis
+            )
+            if cidades_selecionadas:
+                df_display = df_display[df_display['Cidade Destino'].isin(cidades_selecionadas)]
+
+        if 'Último Status' in df_display.columns:
+            status_disponiveis = sorted(df_display['Último Status'].astype(str).unique().tolist())
+            status_selecionados = st.sidebar.multiselect(
+                "Último Status:",
+                options=status_disponiveis,
+                default=status_disponiveis
+            )
+            if status_selecionados:
+                df_display = df_display[df_display['Último Status'].isin(status_selecionados)]
+
+        if total_geral > 0:
+            pct_entregue = (total_entregue / total_geral) * 100
+            pct_em_rota = (total_em_rota / total_geral) * 100
+            pct_insucesso = (total_insucesso / total_geral) * 100
+
+            st.subheader("Progresso Geral das Entregas")
+            st.markdown(
+                f"""
+                <div style="background-color: #ddd; border-radius: 8px; overflow: hidden; display: flex; height: 28px; width: 100%;">
+                    <div style="width: {pct_entregue}%; background-color: #28a745; text-align: center; color: white; font-weight: bold; line-height: 28px; font-size: 13px;" title="Entregue: {total_entregue}">Entregue: {pct_entregue:.1f}%</div>
+                    <div style="width: {pct_em_rota}%; background-color: #ffc107; text-align: center; color: black; font-weight: bold; line-height: 28px; font-size: 13px;" title="Em rota: {total_em_rota}">Em rota: {pct_em_rota:.1f}%</div>
+                    <div style="width: {pct_insucesso}%; background-color: #dc3545; text-align: center; color: white; font-weight: bold; line-height: 28px; font-size: 13px;" title="Outros: {total_insucesso}">Outros: {pct_insucesso:.1f}%</div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+            st.caption(f"Total: {total_geral} pacotes | Entregues: {total_entregue} | Em Rota: {total_em_rota} | Outros: {total_insucesso}")
+            st.markdown("---")
+
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Total de Pacotes", total_geral)
+        col2.metric("Motoristas Ativos", df_display[df_display['Nome do Motorista'] != 'Sem Motorista Atribuido']['Nome do Motorista'].nunique() if 'Nome do Motorista' in df_display.columns else 0)
+        col3.metric("Entregues", total_entregue)
+        col4.metric("Em Rota de Entrega", total_em_rota)
+        
+        st.markdown("---")
+        st.subheader("Pesquisa de AWB")
+        busca_global = st.text_input("Digite o numero da AWB:", placeholder="Ex: 3320184118564")
+        
+        if busca_global and 'Número AWB' in df_display.columns:
+            df_resultado_busca = df_display[df_display['Número AWB'].astype(str).str.contains(busca_global, case=False, na=False)]
+            if len(df_resultado_busca) > 0:
+                st.success(f"Encontrado(s) {len(df_resultado_busca)} registo(s):")
+                st.dataframe(df_resultado_busca, use_container_width=True, hide_index=True)
+            else:
+                st.warning("Nenhuma AWB encontrada.")
+            st.markdown("---")
+
+        st.subheader("Tabela de Acompanhamento")
+        st.dataframe(df_display, use_container_width=True, hide_index=True)
+
+    st.markdown("---")
+else:
+    st.info("Aguardando o supervisor carregar a nova planilha (.xlsx).")
