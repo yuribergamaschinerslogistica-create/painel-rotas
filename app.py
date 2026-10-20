@@ -240,6 +240,22 @@ else:
         cols = ['Número AWB', 'Nome do Motorista', 'Último Status', 'Cidade Destino', 'Data/Hora Última Leitura', 'Hora de Criação']
         df_display = df[[c for c in cols if c in df.columns]]
 
+        # --- FILTROS GLOBAIS NA SIDEBAR ---
+        st.sidebar.markdown("---")
+        st.sidebar.subheader("Filtros Globais")
+
+        if 'Cidade Destino' in df_display.columns:
+            cidades_disp = sorted(df_display['Cidade Destino'].astype(str).unique().tolist())
+            cidades_sel = st.sidebar.multiselect("Cidade Destino:", options=cidades_disp, default=cidades_disp)
+            if cidades_sel:
+                df_display = df_display[df_display['Cidade Destino'].isin(cidades_sel)]
+
+        if 'Último Status' in df_display.columns:
+            status_disp = sorted(df_display['Último Status'].astype(str).unique().tolist())
+            status_sel = st.sidebar.multiselect("Último Status:", options=status_disp, default=status_disp)
+            if status_sel:
+                df_display = df_display[df_display['Último Status'].isin(status_sel)]
+
         total_geral = len(df_display)
         total_entregue = len(df_display[df_display['Último Status'].str.lower() == 'entregue']) if 'Último Status' in df_display.columns else 0
         total_em_rota = len(df_display[df_display['Último Status'].str.lower() == 'em rota de entrega']) if 'Último Status' in df_display.columns else 0
@@ -303,11 +319,18 @@ else:
                 st.rerun()
         else:
             if total_geral > 0:
-                st.subheader("Progresso Geral")
-                cp1, cp2, cp3 = st.columns(3)
-                cp1.metric("Entregues", f"{total_entregue} ({pct_entregue:.1f}%)")
-                cp2.metric("Em Rota", f"{total_em_rota} ({pct_em_rota:.1f}%)")
-                cp3.metric("Outros", f"{total_insucesso} ({pct_insucesso:.1f}%)")
+                st.subheader("Progresso Geral das Entregas")
+                st.markdown(
+                    f"""
+                    <div style="background-color: #ddd; border-radius: 8px; overflow: hidden; display: flex; height: 28px; width: 100%;">
+                        <div style="width: {pct_entregue}%; background-color: #28a745; text-align: center; color: white; font-weight: bold; line-height: 28px; font-size: 13px;" title="Entregue: {total_entregue}">Entregue: {pct_entregue:.1f}%</div>
+                        <div style="width: {pct_em_rota}%; background-color: #ffc107; text-align: center; color: black; font-weight: bold; line-height: 28px; font-size: 13px;" title="Em rota: {total_em_rota}">Em rota: {pct_em_rota:.1f}%</div>
+                        <div style="width: {pct_insucesso}%; background-color: #dc3545; text-align: center; color: white; font-weight: bold; line-height: 28px; font-size: 13px;" title="Outros: {total_insucesso}">Outros: {pct_insucesso:.1f}%</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+                st.caption(f"Total: {total_geral} pacotes | Entregues: {total_entregue} | Em Rota: {total_em_rota} | Outros: {total_insucesso}")
                 st.markdown("---")
 
             c1, c2, c3, c4, c5, c6, c7 = st.columns(7)
