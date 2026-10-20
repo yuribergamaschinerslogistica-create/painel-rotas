@@ -166,7 +166,6 @@ transp_atual = st.session_state["transportadora_ativa"]
 config_atual = FILES[transp_atual]
 DATA_FILE = config_atual["data"]
 
-# Exibição da Logo no Topo da Página
 col_t1, col_t2 = st.columns([1, 8])
 with col_t1:
     if os.path.exists(config_atual["logo"]):
@@ -199,10 +198,7 @@ else:
             if up_file is not None:
                 try:
                     df_r = pd.read_excel(up_file, sheet_name=0)
-                    if transp_atual == "iMile":
-                        df = tratar_dataframe_imile(df_r)
-                    else:
-                        df = tratar_dataframe_anjun(df_r)
+                    df = tratar_dataframe_imile(df_r) if transp_atual == "iMile" else tratar_dataframe_anjun(df_r)
                     df.to_excel(DATA_FILE, index=False)
                     st.success(f"Planilha da {transp_atual} carregada com sucesso!")
                 except Exception as e:
@@ -252,13 +248,10 @@ else:
         st.sidebar.subheader(f"Filtros ({transp_atual})")
 
         if 'Cidade Destino' in df_display.columns:
-            cidades_disp = sorted(df_display['Cidade Destino'].astype(str).unique().tolist())
-            cidades_sel = st.sidebar.multiselect("Cidade Destino:", options=cidades_disp, default=cidades_disp, key=f"cid_{transp_atual}")
-            if cidades_sel:
-                df_display = df_display[df_display['Cidade Destino'].isin(cidades_sel)]
+            cidades = sorted(df_display['Cidade Destino'].astype(str).unique().tolist())
+            c_sel = st.sidebar.multiselect("Cidade Destino:", options=cidades, default=cidades, key=f"c_{transp_atual}")
+            if c_sel:
+                df_display = df_display[df_display['Cidade Destino'].isin(c_sel)]
 
         if 'Último Status' in df_display.columns:
-            status_disp = sorted(df_display['Último Status'].astype(str).unique().tolist())
-            status_sel = st.sidebar.multiselect("Último Status:", options=status_disp, default=status_disp, key=f"stat_{transp_atual}")
-            if status_sel:
-                df_display = df_display[df_display['Último Status'].isin
+            status_list = sorted
