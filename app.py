@@ -6,52 +6,36 @@ import os
 from datetime import datetime
 
 st.set_page_config(
-    page_title="Painel de Acompanhamento Diario",
+    page_title="Painel de Acompanhamento - Transportadoras",
     page_icon="🚚",
     layout="wide"
 )
 
-DATA_FILE = "dados_atuais.xlsx"
+# Diretórios e Ficheiros Separados por Transportadora
 HISTORY_DIR = "historico_diario"
-
 if not os.path.exists(HISTORY_DIR):
     os.makedirs(HISTORY_DIR)
 
-def tratar_dataframe(df_raw):
+FILES = {
+    "iMile": {
+        "data": "dados_imile.xlsx",
+        "prefix": "imile"
+    },
+    "Anjun": {
+        "data": "dados_anjun.xlsx",
+        "prefix": "anjun"
+    }
+}
+
+def tratar_dataframe_imile(df_raw):
     df = df_raw.copy()
     df.columns = df.columns.str.strip()
     
-    if 'Número da Etiqueta' in df.columns:
-        df['Número AWB'] = df['Número da Etiqueta'].astype(str)
-    elif 'Waybill No' in df.columns:
-        df['Número AWB'] = df['Waybill No'].astype(str)
-    else:
-        df['Número AWB'] = 'Nao informado'
-
-    if 'Motorista' in df.columns:
-        df['Nome do Motorista'] = df['Motorista']
-    elif 'Driver Name' in df.columns:
-        df['Nome do Motorista'] = df['Driver Name']
-    else:
-        df['Nome do Motorista'] = 'Sem Motorista Atribuido'
-    df['Nome do Motorista'] = df['Nome do Motorista'].fillna('Sem Motorista Atribuido')
-
-    if 'Último status' in df.columns:
-        df['Último Status'] = df['Último status']
-    elif 'Last scan type' in df.columns:
-        df['Último Status'] = df['Last scan type']
-    else:
-        df['Último Status'] = 'Nao informado'
-    df['Último Status'] = df['Último Status'].fillna('Nao informado')
-
-    if 'Cidade destinatária' in df.columns:
-        df['Cidade Destino'] = df['Cidade destinatária']
-    elif 'Destination City' in df.columns:
-        df['Cidade Destino'] = df['Destination City']
-    else:
-        df['Cidade Destino'] = 'Nao informada'
-    df['Cidade Destino'] = df['Cidade Destino'].fillna('Nao informada')
-
+    df['Número AWB'] = df['Número da Etiqueta'].astype(str) if 'Número da Etiqueta' in df.columns else (df['Waybill No'].astype(str) if 'Waybill No' in df.columns else 'Nao informado')
+    df['Nome do Motorista'] = df['Motorista'].fillna('Sem Motorista Atribuido') if 'Motorista' in df.columns else (df['Driver Name'].fillna('Sem Motorista Atribuido') if 'Driver Name' in df.columns else 'Sem Motorista Atribuido')
+    df['Último Status'] = df['Último status'].fillna('Nao informado') if 'Último status' in df.columns else (df['Last scan type'].fillna('Nao informado') if 'Last scan type' in df.columns else 'Nao informado')
+    df['Cidade Destino'] = df['Cidade destinatária'].fillna('Nao informada') if 'Cidade destinatária' in df.columns else (df['Destination City'].fillna('Nao informada') if 'Destination City' in df.columns else 'Nao informada')
+    
     if 'Horário da última leitura' in df.columns:
         df['Data/Hora Última Leitura'] = pd.to_datetime(df['Horário da última leitura'], errors='coerce')
     elif 'Last scan time' in df.columns:
@@ -64,6 +48,21 @@ def tratar_dataframe(df_raw):
 
     return df
 
+def tratar_dataframe_anjun(df_raw):
+    df = df_raw.copy()
+    df.columns = df.columns.str.strip()
+    
+    # Ajuste para os padrões comuns da Anjun (pode adaptar conforme o Excel que enviar a seguir)
+    df['Número AWB'] = df['AWB'].astype(str) if 'AWB' in df.columns else (df['Tracking Number'].astype(str) if 'Tracking Number' in df.columns else 'Nao informado')
+    df['Nome do Motorista'] = df['Motorista'].fillna('Sem Motorista Atribuido') if 'Motorista' in df.columns else (df['Courier'].fillna('Sem Motorista Atribuido') if 'Courier' in df.columns else 'Sem Motorista Atribuido')
+    df['Último Status'] = df['Status'].fillna('Nao informado') if 'Status' in df.columns else 'Nao informado'
+    df['Cidade Destino'] = df['Cidade'].fillna('Nao informada') if 'Cidade' in df.columns else (df['City'].fillna('Nao informada') if 'City' in df.columns else 'Nao informada')
+    
+    df['Data/Hora Última Leitura'] = pd.to_datetime(df['Data Última Leitura'], errors='coerce') if 'Data Última Leitura' in df.columns else pd.NaT
+    df['Hora de Criação'] = pd.to_datetime(df['Data Criação'], errors='coerce') if 'Data Criação' in df.columns else pd.NaT
+
+    return df
+
 USERS_FILE = "users.json"
 
 def load_users():
@@ -73,15 +72,7 @@ def load_users():
                 "name": "Supervisor Geral", 
                 "password": "admin", 
                 "role": "Supervisor",
-                "email": "admin@logistica.com",
-                "phone": "000000000"
-            },
-            "operador": {
-                "name": "Operador Padrao", 
-                "password": "123", 
-                "role": "Operador",
-                "email": "operador@logistica.com",
-                "phone": "111111111"
+                "email": "admin@logistica.com"
             }
         }
         with open(USERS_FILE, "w", encoding="utf-8") as f:
@@ -90,65 +81,37 @@ def load_users():
     with open(USERS_FILE, "r", encoding="utf-8") as f:
         return json.load(f)
 
-def save_users(users):
-    with open(USERS_FILE, "w", encoding="utf-8") as f:
-        json.dump(users, f, indent=4, ensure_ascii=False)
-
 users_db = load_users()
 
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
     st.session_state["user_info"] = None
 
+if "transportadora_ativa" not in st.session_state:
+    st.session_state["transportadora_ativa"] = "iMile"
+
 if "view_mode" not in st.session_state:
     st.session_state["view_mode"] = "Painel Principal"
 
-if "auth_mode" not in st.session_state:
-    st.session_state["auth_mode"] = "login"
-
 # --- LOGIN ---
 if not st.session_state["logged_in"]:
-    st.title("Acesso - Painel de Rotas")
+    st.title("Acesso - Painel de Transportadoras")
     st.markdown("---")
     col_a, col_b, col_c = st.columns([1, 2, 1])
     
     with col_b:
-        if st.session_state["auth_mode"] == "login":
-            with st.form("login_form"):
-                st.subheader("Iniciar Sessao")
-                username_input = st.text_input("Utilizador")
-                password_input = st.text_input("Senha", type="password")
-                if st.form_submit_button("Entrar"):
-                    if username_input in users_db and users_db[username_input]["password"] == password_input:
-                        st.session_state["logged_in"] = True
-                        st.session_state["username_key"] = username_input
-                        st.session_state["user_info"] = users_db[username_input]
-                        st.rerun()
-                    else:
-                        st.error("Utilizador ou senha incorretos.")
-            
-            if st.button("Esqueci a senha"):
-                st.session_state["auth_mode"] = "recuperar"
-                st.rerun()
-
-        elif st.session_state["auth_mode"] == "recuperar":
-            with st.form("recovery_form"):
-                st.subheader("Recuperacao")
-                rec_user = st.text_input("Utilizador")
-                rec_email = st.text_input("Email")
-                rec_nova = st.text_input("Nova Senha", type="password")
-                if st.form_submit_button("Redefinir"):
-                    if rec_user in users_db and users_db[rec_user].get("email") == rec_email:
-                        users_db[rec_user]["password"] = rec_nova
-                        save_users(users_db)
-                        st.success("Senha redefinida com sucesso!")
-                        st.session_state["auth_mode"] = "login"
-                        st.rerun()
-                    else:
-                        st.error("Dados incorretos.")
-            if st.button("Voltar"):
-                st.session_state["auth_mode"] = "login"
-                st.rerun()
+        with st.form("login_form"):
+            st.subheader("Iniciar Sessao")
+            username_input = st.text_input("Utilizador")
+            password_input = st.text_input("Senha", type="password")
+            if st.form_submit_button("Entrar"):
+                if username_input in users_db and users_db[username_input]["password"] == password_input:
+                    st.session_state["logged_in"] = True
+                    st.session_state["username_key"] = username_input
+                    st.session_state["user_info"] = users_db[username_input]
+                    st.rerun()
+                else:
+                    st.error("Utilizador ou senha incorretos.")
     st.stop()
 
 # --- SIDEBAR ---
@@ -158,6 +121,19 @@ st.sidebar.caption(f"Perfil: {st.session_state['user_info']['role']}")
 if st.sidebar.button("Sair / Logout"):
     st.session_state["logged_in"] = False
     st.session_state["user_info"] = None
+    st.rerun()
+
+st.sidebar.markdown("---")
+st.sidebar.subheader("🚚 Transportadoras")
+
+if st.sidebar.button("📦 iMile", use_container_width=True):
+    st.session_state["transportadora_ativa"] = "iMile"
+    st.session_state["view_mode"] = "Painel Principal"
+    st.rerun()
+
+if st.sidebar.button("📦 Anjun", use_container_width=True):
+    st.session_state["transportadora_ativa"] = "Anjun"
+    st.session_state["view_mode"] = "Painel Principal"
     st.rerun()
 
 st.sidebar.markdown("---")
@@ -174,59 +150,71 @@ if st.sidebar.button("Histórico de Dias"):
     st.session_state["view_mode"] = "Historico"
     st.rerun()
 
-st.title("Painel de Acompanhamento Diario - Rotas e AWBs")
+transp_atual = st.session_state["transportadora_ativa"]
+config_atual = FILES[transp_atual]
+DATA_FILE = config_atual["data"]
+
+st.title(f"Painel de Acompanhamento - {transp_atual}")
 st.markdown("---")
 
 # --- HISTÓRICO ---
 if st.session_state["view_mode"] == "Historico":
-    st.subheader("📚 Histórico de Fechamentos Diários")
-    arquivos = sorted([f for f in os.listdir(HISTORY_DIR) if f.endswith('.xlsx')], reverse=True)
+    st.subheader(f"📚 Histórico de Fechamentos - {transp_atual}")
+    prefixo_filtro = config_atual["prefix"]
+    arquivos = sorted([f for f in os.listdir(HISTORY_DIR) if f.startswith(prefixo_filtro) and f.endswith('.xlsx')], reverse=True)
+    
     if arquivos:
-        sel = st.selectbox("Selecione o ficheiro:", options=arquivos)
+        sel = st.selectbox("Selecione o ficheiro anterior:", options=arquivos)
         if sel:
             df_h = pd.read_excel(os.path.join(HISTORY_DIR, sel))
             st.success(f"Registos: {len(df_h)}")
             st.dataframe(df_h, use_container_width=True, hide_index=True)
     else:
-        st.info("Nenhum histórico encontrado.")
+        st.info(f"Nenhum histórico encontrado para {transp_atual}.")
+        
     if st.button("⬅️ Voltar"):
         st.session_state["view_mode"] = "Painel Principal"
         st.rerun()
 
 else:
-    df = None
     if st.session_state["user_info"]["role"] == "Supervisor":
         c1, c2 = st.columns([3, 1])
         with c1:
-            up_file = st.file_uploader("Carregar Planilha (.xlsx)", type=["xlsx", "xls"])
+            up_file = st.file_uploader(f"Carregar Planilha da {transp_atual} (.xlsx)", type=["xlsx", "xls"])
             if up_file is not None:
                 try:
                     df_r = pd.read_excel(up_file, sheet_name=0)
-                    df = tratar_dataframe(df_r)
-                    df.to_excel(DATA_FILE, index=False)
-                    st.success("Planilha carregada e processada com sucesso!")
+                    if transp_atual == "iMile":
+                        df_t = tratar_dataframe_imile(df_r)
+                    else:
+                        df_t = tratar_dataframe_anjun(df_r)
+                        
+                    df_t.to_excel(DATA_FILE, index=False)
+                    st.success(f"Planilha da {transp_atual} carregada e processada com sucesso!")
                 except Exception as e:
-                    st.error(f"Erro ao processar o ficheiro: {e}")
+                    st.error(f"Erro ao processar: {e}")
         with c2:
             st.write("")
             st.write("")
-            with st.expander("🔒 Encerrar o Dia"):
-                with st.form("form_arq"):
+            with st.expander(f"🔒 Encerrar Dia ({transp_atual})"):
+                with st.form(f"form_arq_{transp_atual}"):
                     senha_c = st.text_input("Senha:", type="password")
                     if st.form_submit_button("Confirmar"):
                         u_key = st.session_state.get("username_key", "")
                         if u_key in users_db and users_db[u_key]["password"] == senha_c:
                             if os.path.exists(DATA_FILE):
                                 dh = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                                os.rename(DATA_FILE, os.path.join(HISTORY_DIR, f"fechamento_{dh}.xlsx"))
+                                novo_nome = f"{config_atual['prefix']}_fechamento_{dh}.xlsx"
+                                os.rename(DATA_FILE, os.path.join(HISTORY_DIR, novo_nome))
                                 st.success("Dia encerrado e sistema zerado!")
                                 st.rerun()
                             else:
-                                st.warning("Sem dados.")
+                                st.warning("Sem dados ativos.")
                         else:
                             st.error("Senha incorreta.")
 
-    if df is None and os.path.exists(DATA_FILE):
+    df = None
+    if os.path.exists(DATA_FILE):
         try:
             df = pd.read_excel(DATA_FILE)
             if 'Data/Hora Última Leitura' in df.columns:
@@ -242,17 +230,17 @@ else:
 
         # --- FILTROS GLOBAIS ---
         st.sidebar.markdown("---")
-        st.sidebar.subheader("Filtros Globais")
+        st.sidebar.subheader(f"Filtros ({transp_atual})")
 
         if 'Cidade Destino' in df_display.columns:
             cidades_disp = sorted(df_display['Cidade Destino'].astype(str).unique().tolist())
-            cidades_sel = st.sidebar.multiselect("Cidade Destino:", options=cidades_disp, default=cidades_disp)
+            cidades_sel = st.sidebar.multiselect("Cidade Destino:", options=cidades_disp, default=cidades_disp, key=f"cid_{transp_atual}")
             if cidades_sel:
                 df_display = df_display[df_display['Cidade Destino'].isin(cidades_sel)]
 
         if 'Último Status' in df_display.columns:
             status_disp = sorted(df_display['Último Status'].astype(str).unique().tolist())
-            status_sel = st.sidebar.multiselect("Último Status:", options=status_disp, default=status_disp)
+            status_sel = st.sidebar.multiselect("Último Status:", options=status_disp, default=status_disp, key=f"stat_{transp_atual}")
             if status_sel:
                 df_display = df_display[df_display['Último Status'].isin(status_sel)]
 
@@ -275,7 +263,7 @@ else:
                 oct_medio = ((df_oct['Data/Hora Última Leitura'] - df_oct['Hora de Criação']).dt.total_seconds() / 86400.0).mean()
 
         if st.session_state["view_mode"] == "Painel Motoristas":
-            st.subheader("Painel Individual por Motorista")
+            st.subheader(f"Painel por Motorista - {transp_atual}")
             busca_m = st.text_input("🔍 Procurar Motorista:", placeholder="Ex: Rodrigo")
             st.markdown("---")
 
@@ -307,7 +295,7 @@ else:
                                     )
                                     fig.update_traces(textinfo='value', showlegend=False)
                                     fig.update_layout(margin=dict(t=5, b=5, l=5, r=5), height=160, paper_bgcolor='rgba(0,0,0,0)')
-                                    st.plotly_chart(fig, use_container_width=True, key=f"d_{i+j}")
+                                    st.plotly_chart(fig, use_container_width=True, key=f"d_{transp_atual}_{i+j}")
                                     
                                     st.write(f"Entregues: {m_ent} | Rota: {m_rot} | Outros: {m_out}")
             else:
@@ -319,7 +307,7 @@ else:
                 st.rerun()
         else:
             if total_geral > 0:
-                st.subheader("Progresso Geral das Entregas")
+                st.subheader(f"Progresso Geral - {transp_atual}")
                 st.markdown(
                     f"""
                     <div style="background-color: #ddd; border-radius: 8px; overflow: hidden; display: flex; height: 28px; width: 100%;">
@@ -344,7 +332,7 @@ else:
             
             st.markdown("---")
             st.subheader("Pesquisa AWB")
-            b_global = st.text_input("Número da AWB:")
+            b_global = st.text_input("Número da AWB:", key=f"search_{transp_atual}")
             if b_global:
                 df_res = df_display[df_display['Número AWB'].astype(str).str.contains(b_global, case=False, na=False)]
                 if not df_res.empty:
@@ -354,7 +342,7 @@ else:
                     st.warning("Não encontrado.")
                 st.markdown("---")
 
-            st.subheader("Tabela de Acompanhamento")
+            st.subheader(f"Tabela de Acompanhamento - {transp_atual}")
             st.dataframe(df_display, use_container_width=True, hide_index=True)
     else:
-        st.info("Aguardando carregamento de planilha para iniciar o dia.")
+        st.info(f"Aguardando carregamento da planilha da **{transp_atual}** para iniciar o dia.")
