@@ -83,7 +83,7 @@ if not st.session_state["logged_in"]:
     st.stop()
 
 if os.path.exists("logo_base.png"):
-    st.sidebar.image("logo_base.png", use_container_width=True)
+    st.sidebar.image("logo_base.png", width=200)
 
 st.sidebar.title(f"Utilizador: {st.session_state['user_info']['name']}")
 st.sidebar.caption(f"Perfil: {st.session_state['user_info']['role']}")
