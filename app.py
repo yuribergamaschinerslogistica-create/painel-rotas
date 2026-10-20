@@ -13,21 +13,13 @@ st.set_page_config(
 DATA_FILE = "dados_atuais.xlsx"
 
 def categorizar_dias(dias):
-    if dias == 0:
-        return 'D0'
-    elif dias == 1:
-        return 'D1'
-    elif dias == 2:
-        return 'D2'
-    elif dias == 3:
-        return 'D3'
-    else:
-        return '> D3'
+    return 'D0'
 
 def tratar_dataframe(df_raw):
     df = df_raw.copy()
     df.columns = df.columns.str.strip()
     
+    # Mapeamento seguro para a nova estrutura de colunas
     if 'Número da Etiqueta' in df.columns:
         df['Número AWB'] = df['Número da Etiqueta'].astype(str)
     elif 'Waybill No' in df.columns:
@@ -59,14 +51,13 @@ def tratar_dataframe(df_raw):
         df['Cidade Destino'] = 'Nao informada'
     df['Cidade Destino'] = df['Cidade Destino'].fillna('Nao informada')
 
-    df['Dias em Rota'] = 0
-    
     if 'Horário da última leitura' in df.columns:
         df['Data/Hora Última Leitura'] = pd.to_datetime(df['Horário da última leitura'], errors='coerce')
     elif 'Last scan time' in df.columns:
         df['Data/Hora Última Leitura'] = pd.to_datetime(df['Last scan time'], errors='coerce')
+    else:
+        df['Data/Hora Última Leitura'] = pd.NaT
 
-    df['Faixa Aging'] = df['Dias em Rota'].apply(categorizar_dias)
     return df
 
 USERS_FILE = "users.json"
@@ -220,11 +211,14 @@ if st.session_state["user_info"]["role"] == "Supervisor":
     with col_up1:
         uploaded_file = st.file_uploader("Faca o upload da nova planilha (.xlsx) para partilhar com a equipa", type=["xlsx", "xls"])
         if uploaded_file is not None:
-            df_raw = pd.read_excel(uploaded_file, sheet_name=0)
-            df_tratado = tratar_dataframe(df_raw)
-            df_tratado.to_excel(DATA_FILE, index=False)
-            st.success("Planilha carregada e partilhada com todos os utilizadores online!")
-            st.rerun()
+            try:
+                df_raw = pd.read_excel(uploaded_file, sheet_name=0)
+                df_tratado = tratar_dataframe(df_raw)
+                df_tratado.to_excel(DATA_FILE, index=False)
+                st.success("Planilha carregada e partilhada com todos os utilizadores online!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Erro ao processar o ficheiro Excel: {e}")
     with col_up2:
         st.write("")
         st.write("")
