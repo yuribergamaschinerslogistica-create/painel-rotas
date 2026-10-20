@@ -10,6 +10,8 @@ st.set_page_config(
     layout="wide"
 )
 
+DATA_FILE = "dados_atuais.xlsx"
+
 def categorizar_dias(dias):
     if dias == 0:
         return 'D0'
@@ -94,9 +96,6 @@ if "view_mode" not in st.session_state:
 
 if "auth_mode" not in st.session_state:
     st.session_state["auth_mode"] = "login"
-
-if "df_global" not in st.session_state:
-    st.session_state["df_global"] = None
 
 # --- TELA DE LOGIN / RECUPERAÇÃO ---
 if not st.session_state["logged_in"]:
@@ -205,20 +204,31 @@ st.markdown("---")
 if st.session_state["user_info"]["role"] == "Supervisor":
     col_up1, col_up2 = st.columns([3, 1])
     with col_up1:
-        uploaded_file = st.file_uploader("Faça o upload do ficheiro Excel (.xlsx) diário", type=["xlsx", "xls"])
+        uploaded_file = st.file_uploader("Faça o upload do ficheiro Excel (.xlsx) para partilhar com a equipa", type=["xlsx", "xls"])
         if uploaded_file is not None:
             df_raw = pd.read_excel(uploaded_file)
-            st.session_state["df_global"] = tratar_dataframe(df_raw)
-            st.success("⚡ Planilha carregada e salva na sessão com sucesso!")
+            df_tratado = tratar_dataframe(df_raw)
+            df_tratado.to_excel(DATA_FILE, index=False)
+            st.success("⚡ Planilha carregada e partilhada com todos os utilizadores online!")
+            st.rerun()
     with col_up2:
         st.write("")
         st.write("")
-        if st.button("🗑️ Limpar Planilha Atual"):
-            st.session_state["df_global"] = None
-            st.success("Planilha limpa da memória!")
+        if st.button("🗑️ Limpar Dados Partilhados"):
+            if os.path.exists(DATA_FILE):
+                os.remove(DATA_FILE)
+            st.success("Dados limpos para toda a equipa!")
             st.rerun()
 
-df = st.session_state["df_global"]
+# Carrega os dados partilhados do servidor (visível para qualquer dispositivo conectado)
+df = None
+if os.path.exists(DATA_FILE):
+    try:
+        df = pd.read_excel(DATA_FILE)
+        if 'Last scan time' in df.columns:
+            df['Last scan time'] = pd.to_datetime(df['Last scan time'], errors='coerce')
+    except Exception:
+        df = None
 
 if df is not None:
     cols_map = {
@@ -435,4 +445,4 @@ if df is not None:
 
     st.markdown("---")
 else:
-    st.info("Aguardando o supervisor carregar o ficheiro Excel (.xlsx) para iniciar o painel.")
+    st.info("Aguardando o supervisor carregar o ficheiro Excel (.xlsx) para partilhar os dados com a equipa.")
