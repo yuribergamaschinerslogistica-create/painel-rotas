@@ -106,7 +106,7 @@ if "view_mode" not in st.session_state:
 if "auth_mode" not in st.session_state:
     st.session_state["auth_mode"] = "login"
 
-# --- TELA DE LOGIN ---
+# --- LOGIN ---
 if not st.session_state["logged_in"]:
     st.title("Acesso - Painel de Rotas")
     st.markdown("---")
@@ -116,49 +116,39 @@ if not st.session_state["logged_in"]:
         if st.session_state["auth_mode"] == "login":
             with st.form("login_form"):
                 st.subheader("Iniciar Sessao")
-                username_input = st.text_input("Utilizador / Login")
+                username_input = st.text_input("Utilizador")
                 password_input = st.text_input("Senha", type="password")
-                submit_button = st.form_submit_button("Entrar")
-                
-                if submit_button:
+                if st.form_submit_button("Entrar"):
                     if username_input in users_db and users_db[username_input]["password"] == password_input:
                         st.session_state["logged_in"] = True
                         st.session_state["username_key"] = username_input
                         st.session_state["user_info"] = users_db[username_input]
-                        st.success(f"Bem-vindo(a), {users_db[username_input]['name']}!")
                         st.rerun()
                     else:
                         st.error("Utilizador ou senha incorretos.")
             
-            if st.button("Esqueci a minha senha / Recuperar Acesso"):
+            if st.button("Esqueci a senha"):
                 st.session_state["auth_mode"] = "recuperar"
                 st.rerun()
 
         elif st.session_state["auth_mode"] == "recuperar":
             with st.form("recovery_form"):
-                st.subheader("Recuperacao de Senha")
-                rec_username = st.text_input("Digite o seu Utilizador / Login")
-                rec_email = st.text_input("Digite o seu Email cadastrado")
-                rec_nova_senha = st.text_input("Defina uma Nova Senha", type="password")
-                submit_rec = st.form_submit_button("Redefinir Senha")
-                
-                if submit_rec:
-                    if rec_username in users_db:
-                        if users_db[rec_username].get("email") == rec_email:
-                            users_db[rec_username]["password"] = rec_nova_senha
-                            save_users(users_db)
-                            st.success("Senha redefinida com sucesso! Faca login com a nova senha.")
-                            st.session_state["auth_mode"] = "login"
-                            st.rerun()
-                        else:
-                            st.error("O email informado nao confere com o registo.")
+                st.subheader("Recuperacao")
+                rec_user = st.text_input("Utilizador")
+                rec_email = st.text_input("Email")
+                rec_nova = st.text_input("Nova Senha", type="password")
+                if st.form_submit_button("Redefinir"):
+                    if rec_user in users_db and users_db[rec_user].get("email") == rec_email:
+                        users_db[rec_user]["password"] = rec_nova
+                        save_users(users_db)
+                        st.success("Senha redefinida com sucesso!")
+                        st.session_state["auth_mode"] = "login"
+                        st.rerun()
                     else:
-                        st.error("Utilizador nao encontrado.")
-            
-            if st.button("Voltar ao Login"):
+                        st.error("Dados incorretos.")
+            if st.button("Voltar"):
                 st.session_state["auth_mode"] = "login"
                 st.rerun()
-                
     st.stop()
 
 # --- SIDEBAR ---
@@ -168,109 +158,70 @@ st.sidebar.caption(f"Perfil: {st.session_state['user_info']['role']}")
 if st.sidebar.button("Sair / Logout"):
     st.session_state["logged_in"] = False
     st.session_state["user_info"] = None
-    st.session_state["view_mode"] = "Painel Principal"
     st.rerun()
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("Navegacao")
-if st.sidebar.button("Ver Painel Principal"):
+if st.sidebar.button("Painel Principal"):
     st.session_state["view_mode"] = "Painel Principal"
     st.rerun()
 
-if st.sidebar.button("Ver Painel por Motorista"):
+if st.sidebar.button("Painel por Motorista"):
     st.session_state["view_mode"] = "Painel Motoristas"
     st.rerun()
 
-if st.sidebar.button("Ver Histórico de Dias Anteriores"):
+if st.sidebar.button("Histórico de Dias"):
     st.session_state["view_mode"] = "Historico"
     st.rerun()
-
-st.sidebar.markdown("---")
-
-if st.session_state["user_info"]["role"] == "Supervisor":
-    with st.sidebar.expander("Cadastrar Novo Utilizador"):
-        with st.form("new_user_form"):
-            new_username = st.text_input("Login (Utilizador)")
-            new_name = st.text_input("Nome Completo")
-            new_email = st.text_input("Email")
-            new_phone = st.text_input("Telefone")
-            new_password = st.text_input("Senha Inicial", type="password")
-            new_role = st.selectbox("Perfil", ["Operador", "Supervisor"])
-            create_btn = st.form_submit_button("Guardar Utilizador")
-            
-            if create_btn:
-                if new_username and new_password and new_name and new_email:
-                    users_db[new_username] = {
-                        "name": new_name, 
-                        "password": new_password, 
-                        "role": new_role,
-                        "email": new_email,
-                        "phone": new_phone
-                    }
-                    save_users(users_db)
-                    st.success(f"Utilizador '{new_username}' cadastrado com sucesso!")
-                else:
-                    st.warning("Preencha os campos obrigatorios.")
 
 st.title("Painel de Acompanhamento Diario - Rotas e AWBs")
 st.markdown("---")
 
-# --- TELA: HISTÓRICO ---
+# --- HISTÓRICO ---
 if st.session_state["view_mode"] == "Historico":
     st.subheader("📚 Histórico de Fechamentos Diários")
-    st.markdown("Consulte os dados salvos de dias anteriores:")
-    st.markdown("---")
-    
-    arquivos_historico = sorted([f for f in os.listdir(HISTORY_DIR) if f.endswith('.xlsx')], reverse=True)
-    
-    if arquivos_historico:
-        arq_selecionado = st.selectbox("Selecione a data/ficheiro anterior:", options=arquivos_historico)
-        if arq_selecionado:
-            df_hist = pd.read_excel(os.path.join(HISTORY_DIR, arq_selecionado))
-            st.success(f"Visualizando dados do ficheiro: {arq_selecionado} (Total: {len(df_hist)})")
-            st.dataframe(df_hist, use_container_width=True, hide_index=True)
+    arquivos = sorted([f for f in os.listdir(HISTORY_DIR) if f.endswith('.xlsx')], reverse=True)
+    if arquivos:
+        sel = st.selectbox("Selecione o ficheiro:", options=arquivos)
+        if sel:
+            df_h = pd.read_excel(os.path.join(HISTORY_DIR, sel))
+            st.success(f"Registos: {len(df_h)}")
+            st.dataframe(df_h, use_container_width=True, hide_index=True)
     else:
-        st.info("Nenhum histórico diário arquivado até o momento.")
-        
-    st.markdown("---")
-    if st.button("⬅️ Voltar ao Painel Principal"):
+        st.info("Nenhum histórico encontrado.")
+    if st.button("⬅️ Voltar"):
         st.session_state["view_mode"] = "Painel Principal"
         st.rerun()
 
 else:
     if st.session_state["user_info"]["role"] == "Supervisor":
-        col_up1, col_up2 = st.columns([3, 1])
-        with col_up1:
-            uploaded_file = st.file_uploader("Faca o upload da nova planilha (.xlsx)", type=["xlsx", "xls"])
-            if uploaded_file is not None:
+        c1, c2 = st.columns([3, 1])
+        with c1:
+            up_file = st.file_uploader("Carregar Planilha (.xlsx)", type=["xlsx", "xls"])
+            if up_file is not None:
                 try:
-                    df_raw = pd.read_excel(uploaded_file, sheet_name=0)
-                    df_tratado = tratar_dataframe(df_raw)
-                    df_tratado.to_excel(DATA_FILE, index=False)
-                    st.success("Planilha carregada e processada com sucesso!")
+                    df_r = pd.read_excel(up_file, sheet_name=0)
+                    df_t = tratar_dataframe(df_r)
+                    df_t.to_excel(DATA_FILE, index=False)
+                    st.success("Planilha carregada!")
                 except Exception as e:
-                    st.error(f"Erro ao processar o ficheiro: {e}")
-        
-        with col_up2:
+                    st.error(f"Erro: {e}")
+        with c2:
             st.write("")
             st.write("")
-            with st.expander("🔒 Encerrar o Dia / Arquivar"):
-                with st.form("form_arquivar_dia"):
-                    st.warning("Arquiva o dia atual e zera o sistema para amanha.")
-                    senha_confirmacao = st.text_input("Digite a sua senha:", type="password")
-                    btn_confirma_arq = st.form_submit_button("Confirmar Fechamento")
-                    
-                    if btn_confirma_arq:
-                        user_key = st.session_state.get("username_key", "")
-                        if user_key in users_db and users_db[user_key]["password"] == senha_confirmacao:
+            with st.expander("🔒 Encerrar o Dia"):
+                with st.form("form_arq"):
+                    senha_c = st.text_input("Senha:", type="password")
+                    if st.form_submit_button("Confirmar"):
+                        u_key = st.session_state.get("username_key", "")
+                        if u_key in users_db and users_db[u_key]["password"] == senha_c:
                             if os.path.exists(DATA_FILE):
-                                data_hoje = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                                destino_hist = os.path.join(HISTORY_DIR, f"fechamento_{data_hoje}.xlsx")
-                                os.rename(DATA_FILE, destino_hist)
-                                st.success("Dia encerrado com sucesso! Sistema zerado.")
+                                dh = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                                os.rename(DATA_FILE, os.path.join(HISTORY_DIR, f"fechamento_{dh}.xlsx"))
+                                st.success("Dia encerrado e sistema zerado!")
                                 st.rerun()
                             else:
-                                st.warning("Não há dados ativos para arquivar.")
+                                st.warning("Sem dados.")
                         else:
                             st.error("Senha incorreta.")
 
@@ -282,13 +233,12 @@ else:
                 df['Data/Hora Última Leitura'] = pd.to_datetime(df['Data/Hora Última Leitura'], errors='coerce')
             if 'Hora de Criação' in df.columns:
                 df['Hora de Criação'] = pd.to_datetime(df['Hora de Criação'], errors='coerce')
-        except Exception:
+        except:
             df = None
 
     if df is not None and not df.empty:
-        cols_desejadas = ['Número AWB', 'Nome do Motorista', 'Último Status', 'Cidade Destino', 'Data/Hora Última Leitura', 'Hora de Criação']
-        cols_existentes = [c for c in cols_desejadas if c in df.columns]
-        df_display = df[cols_existentes]
+        cols = ['Número AWB', 'Nome do Motorista', 'Último Status', 'Cidade Destino', 'Data/Hora Última Leitura', 'Hora de Criação']
+        df_display = df[[c for c in cols if c in df.columns]]
 
         total_geral = len(df_display)
         total_entregue = len(df_display[df_display['Último Status'].str.lower() == 'entregue']) if 'Último Status' in df_display.columns else 0
@@ -304,54 +254,84 @@ else:
 
         oct_medio = 0.0
         if 'Hora de Criação' in df.columns and 'Data/Hora Última Leitura' in df.columns:
-            df_entregues_oct = df[(df['Último Status'].str.lower() == 'entregue') & df['Hora de Criação'].notna() & df['Data/Hora Última Leitura'].notna()]
-            if not df_entregues_oct.empty:
-                diferencas = (df_entregues_oct['Data/Hora Última Leitura'] - df_entregues_oct['Hora de Criação']).dt.total_seconds() / 86400.0
-                oct_medio = diferencas.mean()
+            df_oct = df[(df['Último Status'].str.lower() == 'entregue') & df['Hora de Criação'].notna() & df['Data/Hora Última Leitura'].notna()]
+            if not df_oct.empty:
+                oct_medio = ((df_oct['Data/Hora Última Leitura'] - df_oct['Hora de Criação']).dt.total_seconds() / 86400.0).mean()
 
-        # --- TELA: PAINEL POR MOTORISTA ---
         if st.session_state["view_mode"] == "Painel Motoristas":
             st.subheader("Painel Individual por Motorista")
-            st.markdown("Pesquise pelo nome do motorista ou clique nos status para detalhar as AWBs:")
-            
-            busca_motorista = st.text_input("🔍 Digite o nome do motorista para localizar:", placeholder="Ex: Rodrigo")
+            busca_m = st.text_input("🔍 Procurar Motorista:", placeholder="Ex: Rodrigo")
             st.markdown("---")
 
-            df_motoristas = df_display[df_display['Nome do Motorista'] != 'Sem Motorista Atribuido']
-            
-            if busca_motorista:
-                df_motoristas = df_motoristas[df_motoristas['Nome do Motorista'].astype(str).str.contains(busca_motorista, case=False, na=False)]
+            df_mot_all = df_display[df_display['Nome do Motorista'] != 'Sem Motorista Atribuido']
+            if busca_m:
+                df_mot_all = df_mot_all[df_mot_all['Nome do Motorista'].astype(str).str.contains(busca_m, case=False, na=False)]
 
-            lista_motoristas = sorted(df_motoristas['Nome do Motorista'].unique().tolist())
+            lista_mot = sorted(df_mot_all['Nome do Motorista'].unique().tolist())
 
-            if lista_motoristas:
-                cols_per_row = 3
-                for i in range(0, len(lista_motoristas), cols_per_row):
-                    row_cols = st.columns(cols_per_row)
-                    for j in range(cols_per_row):
-                        if i + j < len(lista_motoristas):
-                            motorista = lista_motoristas[i + j]
-                            df_mot = df_motoristas[df_motoristas['Nome do Motorista'] == motorista]
+            if lista_mot:
+                for i in range(0, len(lista_mot), 3):
+                    cols_r = st.columns(3)
+                    for j in range(3):
+                        if i + j < len(lista_mot):
+                            mot = lista_mot[i + j]
+                            df_m = df_mot_all[df_mot_all['Nome do Motorista'] == mot]
                             
-                            m_entregue = len(df_mot[df_mot['Último Status'].str.lower() == 'entregue'])
-                            m_em_rota = len(df_mot[df_mot['Último Status'].str.lower() == 'em rota de entrega'])
-                            m_anormal = len(df_mot) - (m_entregue + m_em_rota)
+                            m_ent = len(df_m[df_m['Último Status'].str.lower() == 'entregue'])
+                            m_rot = len(df_m[df_m['Último Status'].str.lower() == 'em rota de entrega'])
+                            m_out = len(df_m) - (m_ent + m_rot)
                             
-                            with row_cols[j]:
+                            with cols_r[j]:
                                 with st.container(border=True):
-                                    st.markdown(f"**{motorista}**")
+                                    st.markdown(f"**{mot}**")
+                                    fig = px.pie(
+                                        pd.DataFrame({'S': ['Entregue', 'Rota', 'Outros'], 'Q': [m_ent, m_rot, m_out]}),
+                                        names='S', values='Q', hole=0.6,
+                                        color='S', color_discrete_map={'Entregue': '#28a745', 'Rota': '#ffc107', 'Outros': '#dc3545'}
+                                    )
+                                    fig.update_traces(textinfo='value', showlegend=False)
+                                    fig.update_layout(margin=dict(t=5, b=5, l=5, r=5), height=160, paper_bgcolor='rgba(0,0,0,0)')
+                                    st.plotly_chart(fig, use_container_width=True, key=f"d_{i+j}")
                                     
-                                    df_pie = pd.DataFrame({
-                                        'Status': ['Entregue', 'Em rota', 'Outros/Anormal'],
-                                        'Quantidade': [m_entregue, m_em_rota, m_anormal]
-                                    })
-                                    fig_donut = px.pie(
-                                        df_pie, 
-                                        names='Status', 
-                                        values='Quantidade', 
-                                        hole=0.6,
-                                        color='Status',
-                                        color_discrete_map={
-                                            'Entregue': '#28a745', 
-                                            'Em rota': '#ffc107', 
-                                            'Outros/
+                                    st.write(f"Entregues: {m_ent} | Rota: {m_rot} | Outros: {m_out}")
+            else:
+                st.info("Nenhum motorista encontrado.")
+
+            st.markdown("---")
+            if st.button("Voltar"):
+                st.session_state["view_mode"] = "Painel Principal"
+                st.rerun()
+        else:
+            if total_geral > 0:
+                st.subheader("Progresso Geral")
+                cp1, cp2, cp3 = st.columns(3)
+                cp1.metric("Entregues", f"{total_entregue} ({pct_entregue:.1f}%)")
+                cp2.metric("Em Rota", f"{total_em_rota} ({pct_em_rota:.1f}%)")
+                cp3.metric("Outros", f"{total_insucesso} ({pct_insucesso:.1f}%)")
+                st.markdown("---")
+
+            c1, c2, c3, c4, c5, c6, c7 = st.columns(7)
+            c1.metric("Total", total_geral)
+            c2.metric("Motoristas", df_display[df_display['Nome do Motorista'] != 'Sem Motorista Atribuido']['Nome do Motorista'].nunique())
+            c3.metric("Entregues", total_entregue)
+            c4.metric("Em Rota", total_em_rota)
+            c5.metric("SLA", f"{sla_geral:.1f}%")
+            c6.metric("OTIF", f"{otif:.1f}%")
+            c7.metric("OCT", f"{oct_medio:.1f} dias")
+            
+            st.markdown("---")
+            st.subheader("Pesquisa AWB")
+            b_global = st.text_input("Número da AWB:")
+            if b_global:
+                df_res = df_display[df_display['Número AWB'].astype(str).str.contains(b_global, case=False, na=False)]
+                if not df_res.empty:
+                    st.success(f"{len(df_res)} registo(s) encontrado(s):")
+                    st.dataframe(df_res, use_container_width=True, hide_index=True)
+                else:
+                    st.warning("Não encontrado.")
+                st.markdown("---")
+
+            st.subheader("Tabela de Acompanhamento")
+            st.dataframe(df_display, use_container_width=True, hide_index=True)
+    else:
+        st.info("Aguardando carregamento de planilha para iniciar o dia.")
