@@ -28,39 +28,46 @@ def tratar_dataframe(df_raw):
     df = df_raw.copy()
     df.columns = df.columns.str.strip()
     
-    if 'Waybill No' not in df.columns:
-        for col in df.columns:
-            if 'waybill' in col.lower() or 'awb' in col.lower():
-                df = df.rename(columns={col: 'Waybill No'})
-                break
+    # Mapeamento robusto para a nova estrutura de colunas
+    if 'Número da Etiqueta' in df.columns:
+        df['Número AWB'] = df['Número da Etiqueta'].astype(str)
+    elif 'Waybill No' in df.columns:
+        df['Número AWB'] = df['Waybill No'].astype(str)
+    else:
+        df['Número AWB'] = 'Nao informado'
 
-    # Mapeamento com base na nova estrutura da planilha
     if 'Motorista' in df.columns:
-        df['Driver Name'] = df['Motorista']
-    elif 'Driver Name' not in df.columns:
-        df['Driver Name'] = 'Sem Motorista Atribuido'
-    df['Driver Name'] = df['Driver Name'].fillna('Sem Motorista Atribuido')
+        df['Nome do Motorista'] = df['Motorista']
+    elif 'Driver Name' in df.columns:
+        df['Nome do Motorista'] = df['Driver Name']
+    else:
+        df['Nome do Motorista'] = 'Sem Motorista Atribuido'
+    df['Nome do Motorista'] = df['Nome do Motorista'].fillna('Sem Motorista Atribuido')
 
     if 'Último status' in df.columns:
-        df['Last scan type'] = df['Último status']
-    elif 'Last scan type' not in df.columns:
-        df['Last scan type'] = 'Nao informado'
-    df['Last scan type'] = df['Last scan type'].fillna('Nao informado')
+        df['Último Status'] = df['Último status']
+    elif 'Last scan type' in df.columns:
+        df['Último Status'] = df['Last scan type']
+    else:
+        df['Último Status'] = 'Nao informado'
+    df['Último Status'] = df['Último Status'].fillna('Nao informado')
 
     if 'Cidade destinatária' in df.columns:
-        df['Destination City'] = df['Cidade destinatária']
-    elif 'Destination City' not in df.columns:
-        df['Destination City'] = 'Nao informada'
-    df['Destination City'] = df['Destination City'].fillna('Nao informada')
+        df['Cidade Destino'] = df['Cidade destinatária']
+    elif 'Destination City' in df.columns:
+        df['Cidade Destino'] = df['Destination City']
+    else:
+        df['Cidade Destino'] = 'Nao informada'
+    df['Cidade Destino'] = df['Cidade Destino'].fillna('Nao informada')
 
-    df['Backlog time(Station)'] = 0  # Ajuste padrão caso não exista coluna de dias
+    df['Dias em Rota'] = 0
     
     if 'Horário da última leitura' in df.columns:
-        df['Last scan time'] = pd.to_datetime(df['Horário da última leitura'], errors='coerce')
+        df['Data/Hora Última Leitura'] = pd.to_datetime(df['Horário da última leitura'], errors='coerce')
     elif 'Last scan time' in df.columns:
-        df['Last scan time'] = pd.to_datetime(df['Last scan time'], errors='coerce')
+        df['Data/Hora Última Leitura'] = pd.to_datetime(df['Last scan time'], errors='coerce')
 
-    df['Faixa Aging'] = df['Backlog time(Station)'].apply(categorizar_dias)
+    df['Faixa Aging'] = df['Dias em Rota'].apply(categorizar_dias)
     return df
 
 USERS_FILE = "users.json"
@@ -212,9 +219,9 @@ st.markdown("---")
 if st.session_state["user_info"]["role"] == "Supervisor":
     col_up1, col_up2 = st.columns([3, 1])
     with col_up1:
-        uploaded_file = st.file_uploader("Faca o upload do ficheiro Excel (.xlsx) para partilhar com a equipa", type=["xlsx", "xls"])
+        uploaded_file = st.file_uploader("Faca o upload da nova planilha (.xlsx) para partilhar com a equipa", type=["xlsx", "xls"])
         if uploaded_file is not None:
-            df_raw = pd.read_excel(uploaded_file)
+            df_raw = pd.read_excel(uploaded_file, sheet_name=0)
             df_tratado = tratar_dataframe(df_raw)
             df_tratado.to_excel(DATA_FILE, index=False)
             st.success("Planilha carregada e partilhada com todos os utilizadores online!")
@@ -232,23 +239,15 @@ df = None
 if os.path.exists(DATA_FILE):
     try:
         df = pd.read_excel(DATA_FILE)
-        if 'Last scan time' in df.columns:
-            df['Last scan time'] = pd.to_datetime(df['Last scan time'], errors='coerce')
+        if 'Data/Hora Última Leitura' in df.columns:
+            df['Data/Hora Última Leitura'] = pd.to_datetime(df['Data/Hora Última Leitura'], errors='coerce')
     except Exception:
         df = None
 
 if df is not None:
-    cols_map = {
-        'Número da Etiqueta': 'Número AWB',
-        'AWB principal': 'AWB Principal',
-        'Driver Name': 'Nome do Motorista',
-        'Last scan type': 'Último Status',
-        'Last scan time': 'Data/Hora Última Leitura',
-        'Destination City': 'Cidade Destino'
-    }
-    
-    cols_existentes = [c for c in cols_map.keys() if c in df.columns]
-    df_display = df[cols_existentes].rename(columns=cols_map)
+    cols_desejadas = ['Número AWB', 'Nome do Motorista', 'Último Status', 'Cidade Destino', 'Data/Hora Última Leitura']
+    cols_existentes = [c for c in cols_desejadas if c in df.columns]
+    df_display = df[cols_existentes]
 
     # --- FILTROS NA SIDEBAR ---
     st.sidebar.markdown("---")
@@ -303,30 +302,43 @@ if df is not None:
 
     col1, col2, col3, col4 = st.columns(4)
     col1.metric("Total de Pacotes", total_geral)
-    col2.metric("Motoristas Ativos", df_display[df_display['Nome do Motorista'] != 'Sem Motorista Atribuido']['Nome do Motorista'].nunique())
+    col2.metric("Motoristas Ativos", df_display[df_display['Nome do Motorista'] != 'Sem Motorista Atribuido']['Nome do Motorista'].nunique() if 'Nome do Motorista' in df_display.columns else 0)
     col3.metric("Entregues", total_entregue if total_geral > 0 else 0)
     col4.metric("Em Rota de Entrega", total_em_rota if total_geral > 0 else 0)
     
     st.markdown("---")
+    st.markdown("### 🔍 Pesquisa Rápida de AWB")
+    busca_global = st.text_input("Digite o número da AWB para localizar instantaneamente:", placeholder="Ex: 3320184118564")
+    
+    if busca_global and 'Número AWB' in df_display.columns:
+        df_resultado_busca = df_display[df_display['Número AWB'].astype(str).str.contains(busca_global, case=False, na=False)]
+        if len(df_resultado_busca) > 0:
+            st.success(f"Encontrado(s) {len(df_resultado_busca)} registo(s) para a AWB pesquisada:")
+            st.dataframe(df_resultado_busca, use_container_width=True, hide_index=True)
+        else:
+            st.warning("Nenhuma AWB encontrada com este número no histórico.")
+        st.markdown("---")
+
     st.subheader("📋 Tabela de Acompanhamento e Detalhes")
     st.dataframe(df_display, use_container_width=True, hide_index=True)
 
     st.markdown("---")
     st.subheader("📊 Análise Visual por Motorista")
     
-    df_motoristas = df_display[df_display['Nome do Motorista'] != 'Sem Motorista Atribuido']
-    if not df_motoristas.empty:
-        df_motorista_status = df_motoristas.groupby(['Nome do Motorista', 'Último Status']).size().reset_index(name='Quantidade')
-        fig = px.bar(
-            df_motorista_status,
-            x='Nome do Motorista',
-            y='Quantidade',
-            color='Último Status',
-            title="Volume de Pacotes por Motorista e Status",
-            color_discrete_map={'Entregue': '#28a745', 'Em rota de entrega': '#ffc107'}
-        )
-        fig.update_layout(xaxis_tickangle=-45)
-        st.plotly_chart(fig, use_container_width=True)
+    if 'Nome do Motorista' in df_display.columns and 'Último Status' in df_display.columns:
+        df_motoristas = df_display[df_display['Nome do Motorista'] != 'Sem Motorista Atribuido']
+        if not df_motoristas.empty:
+            df_motorista_status = df_motoristas.groupby(['Nome do Motorista', 'Último Status']).size().reset_index(name='Quantidade')
+            fig = px.bar(
+                df_motorista_status,
+                x='Nome do Motorista',
+                y='Quantidade',
+                color='Último Status',
+                title="Volume de Pacotes por Motorista e Status",
+                color_discrete_map={'Entregue': '#28a745', 'Em rota de entrega': '#ffc107'}
+            )
+            fig.update_layout(xaxis_tickangle=-45)
+            st.plotly_chart(fig, use_container_width=True)
 
     st.markdown("---")
 else:
