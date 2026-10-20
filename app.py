@@ -263,4 +263,7 @@ else:
                     
                     if btn_confirma_arq:
                         user_key = st.session_state.get("username_key", "")
-                        if user_key in users_db and users_db[user_key]["password"] == senha_confirm
+                        if user_key in users_db and users_db[user_key]["password"] == senha_confirmacao:
+                            if os.path.exists(DATA_FILE):
+                                data_hoje = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                                destino_hist = os
