@@ -45,12 +45,24 @@ def tratar_dataframe_anjun(df_raw):
 USERS_FILE = "users.json"
 def load_users():
     if not os.path.exists(USERS_FILE):
-        default_users = {"admin": {"name": "Supervisor Geral", "password": "admin", "role": "Supervisor", "email": "admin@logistica.com"}}
+        default_users = {
+            "admin": {
+                "name": "Supervisor Geral", 
+                "password": "admin", 
+                "role": "Supervisor",
+                "email": "admin@logistica.com",
+                "phone": "000000000"
+            }
+        }
         with open(USERS_FILE, "w", encoding="utf-8") as f:
             json.dump(default_users, f, indent=4, ensure_ascii=False)
         return default_users
     with open(USERS_FILE, "r", encoding="utf-8") as f:
         return json.load(f)
+
+def save_users(users):
+    with open(USERS_FILE, "w", encoding="utf-8") as f:
+        json.dump(users, f, indent=4, ensure_ascii=False)
 
 users_db = load_users()
 
@@ -113,6 +125,33 @@ if st.sidebar.button("Painel por Motorista"):
 if st.sidebar.button("Histórico de Dias"):
     st.session_state["view_mode"] = "Historico"
     st.rerun()
+
+# --- CADASTRO DE NOVOS COLABORADORES (APENAS SUPERVISOR) ---
+if st.session_state["user_info"]["role"] == "Supervisor":
+    st.sidebar.markdown("---")
+    with st.sidebar.expander("Cadastrar Novo Colaborador"):
+        with st.form("new_user_form"):
+            new_username = st.text_input("Login (Utilizador)")
+            new_name = st.text_input("Nome Completo")
+            new_email = st.text_input("Email")
+            new_phone = st.text_input("Telefone")
+            new_password = st.text_input("Senha Inicial", type="password")
+            new_role = st.selectbox("Perfil", ["Operador", "Supervisor"])
+            create_btn = st.form_submit_button("Guardar Utilizador")
+            
+            if create_btn:
+                if new_username and new_password and new_name and new_email:
+                    users_db[new_username] = {
+                        "name": new_name, 
+                        "password": new_password, 
+                        "role": new_role,
+                        "email": new_email,
+                        "phone": new_phone
+                    }
+                    save_users(users_db)
+                    st.sidebar.success(f"Utilizador '{new_username}' cadastrado com sucesso!")
+                else:
+                    st.sidebar.warning("Preencha todos os campos obrigatórios.")
 
 transp_atual = st.session_state["transportadora_ativa"]
 config_atual = FILES[transp_atual]
@@ -255,51 +294,3 @@ else:
                                     fig.update_layout(margin=dict(t=5, b=5, l=5, r=5), height=160, paper_bgcolor='rgba(0,0,0,0)')
                                     st.plotly_chart(fig, use_container_width=True, key=f"d_{transp_atual}_{i+j}")
                                     st.write(f"Entregues: {m_ent} | Rota: {m_rot} | Outros: {m_out}")
-            else:
-                st.info("Nenhum motorista encontrado.")
-
-            st.markdown("---")
-            if st.button("Voltar"):
-                st.session_state["view_mode"] = "Painel Principal"
-                st.rerun()
-        else:
-            if total_geral > 0:
-                st.subheader(f"Progresso Geral - {transp_atual}")
-                st.markdown(
-                    f"""
-                    <div style="background-color: #ddd; border-radius: 8px; overflow: hidden; display: flex; height: 28px; width: 100%;">
-                        <div style="width: {pct_entregue}%; background-color: #28a745; text-align: center; color: white; font-weight: bold; line-height: 28px; font-size: 13px;">Entregue: {pct_entregue:.1f}%</div>
-                        <div style="width: {pct_em_rota}%; background-color: #ffc107; text-align: center; color: black; font-weight: bold; line-height: 28px; font-size: 13px;">Em rota: {pct_em_rota:.1f}%</div>
-                        <div style="width: {pct_insucesso}%; background-color: #dc3545; text-align: center; color: white; font-weight: bold; line-height: 28px; font-size: 13px;">Outros: {pct_insucesso:.1f}%</div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
-                st.caption(f"Total: {total_geral} pacotes | Entregues: {total_entregue} | Em Rota: {total_em_rota} | Outros: {total_insucesso}")
-                st.markdown("---")
-
-            c1, c2, c3, c4, c5, c6, c7 = st.columns(7)
-            c1.metric("Total", total_geral)
-            c2.metric("Motoristas", df_display[df_display['Nome do Motorista'] != 'Sem Motorista Atribuido']['Nome do Motorista'].nunique())
-            c3.metric("Entregues", total_entregue)
-            c4.metric("Em Rota", total_em_rota)
-            c5.metric("SLA", f"{sla_geral:.1f}%")
-            c6.metric("OTIF", f"{otif:.1f}%")
-            c7.metric("OCT", f"{oct_medio:.1f} dias")
-            
-            st.markdown("---")
-            st.subheader("Pesquisa AWB")
-            b_global = st.text_input("Número da AWB:", key=f"search_{transp_atual}")
-            if b_global:
-                df_res = df_display[df_display['Número AWB'].astype(str).str.contains(b_global, case=False, na=False)]
-                if not df_res.empty:
-                    st.success(f"{len(df_res)} registo(s) encontrado(s):")
-                    st.dataframe(df_res, use_container_width=True, hide_index=True)
-                else:
-                    st.warning("Não encontrado.")
-                st.markdown("---")
-
-            st.subheader(f"Tabela de Acompanhamento - {transp_atual}")
-            st.dataframe(df_display, use_container_width=True, hide_index=True)
-    else:
-        st.info(f"Aguardando carregamento da planilha da **{transp_atual}** para iniciar o dia.")
