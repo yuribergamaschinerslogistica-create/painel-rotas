@@ -233,37 +233,4 @@ else:
                 df = pd.read_excel(DATA_FILE)
             except:
                 df = None
-        elif os.path.exists("dados_atuais.xlsx"):
-            try:
-                df = pd.read_excel("dados_atuais.xlsx")
-            except:
-                df = None
-
-    if df is not None and not df.empty:
-        if 'Data/Hora Última Leitura' in df.columns:
-            df['Data/Hora Última Leitura'] = pd.to_datetime(df['Data/Hora Última Leitura'], errors='coerce')
-        if 'Hora de Criação' in df.columns:
-            df['Hora de Criação'] = pd.to_datetime(df['Hora de Criação'], errors='coerce')
-
-        cols = ['Número AWB', 'Nome do Motorista', 'Último Status', 'Cidade Destino', 'Data/Hora Última Leitura', 'Hora de Criação']
-        df_display = df[[c for c in cols if c in df.columns]]
-
-        st.sidebar.markdown("---")
-        st.sidebar.subheader(f"Filtros ({transp_atual})")
-
-        if 'Cidade Destino' in df_display.columns:
-            cidades_disp = sorted(df_display['Cidade Destino'].astype(str).unique().tolist())
-            cidades_sel = st.sidebar.multiselect("Cidade Destino:", options=cidades_disp, default=cidades_disp, key=f"cid_{transp_atual}")
-            if cidades_sel:
-                df_display = df_display[df_display['Cidade Destino'].isin(cidades_sel)]
-
-        if 'Último Status' in df_display.columns:
-            status_disp = sorted(df_display['Último Status'].astype(str).unique().tolist())
-            status_sel = st.sidebar.multiselect("Último Status:", options=status_disp, default=status_disp, key=f"stat_{transp_atual}")
-            if status_sel:
-                df_display = df_display[df_display['Último Status'].isin(status_sel)]
-
-        total_geral = len(df_display)
-        status_lower = df_display['Último Status'].astype(str).str.lower() if 'Último Status' in df_display.columns else pd.Series([""] * total_geral)
-        
-        total_entregue = int(status_lower.str.contains
+        elif os.path.exists("dados_atuais.xlsx
