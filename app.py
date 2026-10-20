@@ -123,6 +123,7 @@ if not st.session_state["logged_in"]:
                 if submit_button:
                     if username_input in users_db and users_db[username_input]["password"] == password_input:
                         st.session_state["logged_in"] = True
+                        st.session_state["username_key"] = username_input
                         st.session_state["user_info"] = users_db[username_input]
                         st.success(f"Bem-vindo(a), {users_db[username_input]['name']}!")
                         st.rerun()
@@ -238,7 +239,7 @@ if st.session_state["view_mode"] == "Historico":
 
 else:
     if st.session_state["user_info"]["role"] == "Supervisor":
-        col_up1, col_up2, col_up3 = st.columns([2, 1, 1])
+        col_up1, col_up2 = st.columns([3, 1])
         with col_up1:
             uploaded_file = st.file_uploader("Faca o upload da nova planilha (.xlsx)", type=["xlsx", "xls"])
             if uploaded_file is not None:
@@ -250,26 +251,29 @@ else:
                     st.rerun()
                 except Exception as e:
                     st.error(f"Erro ao processar o ficheiro: {e}")
+        
         with col_up2:
             st.write("")
             st.write("")
-            if st.button("🔒 Encerrar o Dia / Arquivar"):
-                if os.path.exists(DATA_FILE):
-                    data_hoje = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                    destino_hist = os.path.join(HISTORY_DIR, f"fechamento_{data_hoje}.xlsx")
-                    os.rename(DATA_FILE, destino_hist)
-                    st.success("Dia encerrado! Dados arquivados com sucesso e sistema zerado para o dia seguinte.")
-                    st.rerun()
-                else:
-                    st.warning("Não há dados ativos para arquivar.")
-        with col_up3:
-            st.write("")
-            st.write("")
-            if st.button("🗑️ Limpar Dados Atuais"):
-                if os.path.exists(DATA_FILE):
-                    os.remove(DATA_FILE)
-                st.success("Dados limpos!")
-                st.rerun()
+            with st.expander("🔒 Encerrar o Dia / Arquivar"):
+                with st.form("form_arquivar_dia"):
+                    st.warning("Esta acao vai arquivar o dia atual e limpar a tela para o dia seguinte.")
+                    senha_confirmacao = st.text_input("Digite a sua senha para confirmar:", type="password")
+                    btn_confirma_arq = st.form_submit_button("Confirmar Fechamento")
+                    
+                    if btn_confirma_arq:
+                        user_key = st.session_state.get("username_key", "")
+                        if user_key in users_db and users_db[user_key]["password"] == senha_confirmacao:
+                            if os.path.exists(DATA_FILE):
+                                data_hoje = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                                destino_hist = os.path.join(HISTORY_DIR, f"fechamento_{data_hoje}.xlsx")
+                                os.rename(DATA_FILE, destino_hist)
+                                st.success("Dia encerrado! Dados arquivados com sucesso e sistema zerado.")
+                                st.rerun()
+                            else:
+                                st.warning("Não há dados ativos para arquivar.")
+                        else:
+                            st.error("Senha incorreta. Fechamento cancelado.")
 
     df = None
     if os.path.exists(DATA_FILE):
@@ -416,41 +420,4 @@ else:
                 st.markdown(
                     f"""
                     <div style="background-color: #ddd; border-radius: 8px; overflow: hidden; display: flex; height: 28px; width: 100%;">
-                        <div style="width: {pct_entregue}%; background-color: #28a745; text-align: center; color: white; font-weight: bold; line-height: 28px; font-size: 13px;" title="Entregue: {total_entregue}">Entregue: {pct_entregue:.1f}%</div>
-                        <div style="width: {pct_em_rota}%; background-color: #ffc107; text-align: center; color: black; font-weight: bold; line-height: 28px; font-size: 13px;" title="Em rota: {total_em_rota}">Em rota: {pct_em_rota:.1f}%</div>
-                        <div style="width: {pct_insucesso}%; background-color: #dc3545; text-align: center; color: white; font-weight: bold; line-height: 28px; font-size: 13px;" title="Outros: {total_insucesso}">Outros: {pct_insucesso:.1f}%</div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
-                st.caption(f"Total: {total_geral} pacotes | Entregues: {total_entregue} | Em Rota: {total_em_rota} | Outros: {total_insucesso}")
-                st.markdown("---")
-
-            col1, col2, col3, col4, col5, col6, col7 = st.columns(7)
-            col1.metric("Total de Pacotes", total_geral)
-            col2.metric("Motoristas Ativos", df_display[df_display['Nome do Motorista'] != 'Sem Motorista Atribuido']['Nome do Motorista'].nunique() if 'Nome do Motorista' in df_display.columns else 0)
-            col3.metric("Entregues", total_entregue)
-            col4.metric("Em Rota de Entrega", total_em_rota)
-            col5.metric("SLA Geral", f"{sla_geral:.1f}%")
-            col6.metric("OTIF", f"{otif:.1f}%")
-            col7.metric("OCT Médio", f"{oct_medio:.1f} dias")
-            
-            st.markdown("---")
-            st.subheader("Pesquisa de AWB")
-            busca_global = st.text_input("Digite o numero da AWB:", placeholder="Ex: 3320184118564")
-            
-            if busca_global and 'Número AWB' in df_display.columns:
-                df_resultado_busca = df_display[df_display['Número AWB'].astype(str).str.contains(busca_global, case=False, na=False)]
-                if len(df_resultado_busca) > 0:
-                    st.success(f"Encontrado(s) {len(df_resultado_busca)} registo(s):")
-                    st.dataframe(df_resultado_busca, use_container_width=True, hide_index=True)
-                else:
-                    st.warning("Nenhuma AWB encontrada.")
-                st.markdown("---")
-
-            st.subheader("Tabela de Acompanhamento")
-            st.dataframe(df_display, use_container_width=True, hide_index=True)
-
-        st.markdown("---")
-    else:
-        st.info("Aguardando o supervisor carregar a nova planilha (.xlsx) para iniciar o dia.")
+                        <div style="width: {pct_entregue}%;
