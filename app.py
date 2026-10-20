@@ -210,6 +210,7 @@ if st.session_state["user_info"]["role"] == "Supervisor":
             df_tratado = tratar_dataframe(df_raw)
             df_tratado.to_excel(DATA_FILE, index=False)
             st.success("Planilha carregada e partilhada com todos os utilizadores online!")
+            st.rerun()
     with col_up2:
         st.write("")
         st.write("")
@@ -248,3 +249,210 @@ if df is not None:
     st.sidebar.subheader("Filtros Globais")
 
     # 1. Filtro por Cidade Destino
+    if 'Cidade Destino' in df_display.columns:
+        cidades_disponiveis = sorted(df_display['Cidade Destino'].astype(str).unique().tolist())
+        cidades_selecionadas = st.sidebar.multiselect(
+            "Filtrar por Cidade Destino:",
+            options=cidades_disponiveis,
+            default=cidades_disponiveis
+        )
+        if cidades_selecionadas:
+            df_display = df_display[df_display['Cidade Destino'].isin(cidades_selecionadas)]
+
+    # 2. Filtro por Ultima Movimentacao
+    if 'Ultima Movimentacao' in df_display.columns:
+        movimentacoes_disponiveis = sorted(df_display['Ultima Movimentacao'].astype(str).unique().tolist())
+        movimentacoes_selecionadas = st.sidebar.multiselect(
+            "Filtrar por Ultima Movimentacao:",
+            options=movimentacoes_disponiveis,
+            default=movimentacoes_disponiveis
+        )
+        if movimentacoes_selecionadas:
+            df_display = df_display[df_display['Ultima Movimentacao'].isin(movimentacoes_selecionadas)]
+
+    # 3. Filtro por Intervalo de Datas
+    if 'Data/Hora Ultimo Scan' in df_display.columns and df_display['Data/Hora Ultimo Scan'].notna().any():
+        min_date = df_display['Data/Hora Ultimo Scan'].min().date()
+        max_date = df_display['Data/Hora Ultimo Scan'].max().date()
+        
+        filtro_datas = st.sidebar.date_input(
+            "Selecione o intervalo de datas:",
+            value=(min_date, max_date),
+            min_value=min_date,
+            max_value=max_date
+        )
+        
+        if isinstance(filtro_datas, tuple) and len(filtro_datas) == 2:
+            start_d, end_d = filtro_datas
+            df_display = df_display[
+                (df_display['Data/Hora Ultimo Scan'].dt.date >= start_d) & 
+                (df_display['Data/Hora Ultimo Scan'].dt.date <= end_d)
+            ]
+
+    df_criticas = df_display[df_display['Dias em Rota'] > 3]
+
+    if st.session_state["view_mode"] == "AWBs Criticas":
+        st.subheader("Listagem Completa de AWBs Criticas (>3 Dias em Rota)")
+        st.markdown("Aqui estao centralizadas todas as encomendas criticas que ultrapassaram 3 dias em rota:")
+        
+        pesquisa_central = st.text_input("Pesquisar por numero da AWB ou Motorista na lista critica:")
+        df_filtrada_criticas = df_criticas
+        if pesquisa_central:
+            df_filtrada_criticas = df_criticas[
+                df_filtrada_criticas['Numero AWB'].astype(str).str.contains(pesquisa_central, case=False, na=False) |
+                df_filtrada_criticas['Nome do Motorista'].str.contains(pesquisa_central, case=False, na=False)
+            ]
+        
+        st.dataframe(
+            df_filtrada_criticas[['Numero AWB', 'Nome do Motorista', 'Faixa D0-D3', 'Dias em Rota', 'Cidade Destino', 'Ultima Movimentacao', 'Data/Hora Ultimo Scan']],
+            use_container_width=True,
+            hide_index=True
+        )
+        
+        if st.button("Voltar ao Painel Principal"):
+            st.session_state["view_mode"] = "Painel Principal"
+            st.rerun()
+            
+    else:
+        st.markdown("### Pesquisa Rapida de AWB")
+        busca_global = st.text_input("Digite o numero da AWB para localizar instantaneamente:", placeholder="Ex: 3320108174832")
+        
+        if busca_global:
+            df_resultado_busca = df_display[df_display['Numero AWB'].astype(str).str.contains(busca_global, case=False, na=False)]
+            if len(df_resultado_busca) > 0:
+                st.success(f"Encontrado(s) {len(df_resultado_busca)} registo(s) para a AWB pesquisada:")
+                st.dataframe(
+                    df_resultado_busca[['Numero AWB', 'Nome do Motorista', 'Status do Registro', 'Faixa D0-D3', 'Dias em Rota', 'Cidade Destino', 'Ultima Movimentacao', 'Data/Hora Ultimo Scan']],
+                    use_container_width=True,
+                    hide_index=True
+                )
+            else:
+                st.warning("Nenhuma AWB encontrada com este numero no historico.")
+            st.markdown("---")
+
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Total de AWBs", len(df_display))
+        col2.metric("Motoristas Ativos", df_display[df_display['Nome do Motorista'] != 'Sem Motorista Atribuido']['Nome do Motorista'].nunique())
+        col3.metric("Media de Dias em Rota", f"{df_display['Dias em Rota'].mean():.1f} dias")
+        col4.metric("AWBs Criticas (>3 dias)", len(df_criticas))
+        
+        st.markdown("---")
+
+        st.subheader("Distribuição de Entregas por Antiguidade (Aging D0 a >D3)")
+        
+        c_d0, c_d1, c_d2, c_d3, c_d_critico = st.columns(5)
+        c_d0.metric("D0 (0 Dias)", len(df_display[df_display['Faixa D0-D3'] == 'D0']))
+        c_d1.metric("D1 (1 Dia)", len(df_display[df_display['Faixa D0-D3'] == 'D1']))
+        c_d2.metric("D2 (2 Dias)", len(df_display[df_display['Faixa D0-D3'] == 'D2']))
+        c_d3.metric("D3 (3 Dias)", len(df_display[df_display['Faixa D0-D3'] == 'D3']))
+        c_d_critico.metric("> D3 (Criticas)", len(df_display[df_display['Faixa D0-D3'] == '> D3']))
+
+        with st.expander("Filtrar Tabela por Faixa de Aging (D0, D1, D2, D3, >D3)"):
+            faixas_selecionadas = st.multiselect(
+                "Selecione a(s) faixa(s) que pretende visualizar:",
+                options=['D0', 'D1', 'D2', 'D3', '> D3'],
+                default=['D0', 'D1', 'D2', 'D3', '> D3']
+            )
+            if faixas_selecionadas:
+                df_aging_filtrado = df_display[df_display['Faixa D0-D3'].isin(faixas_selecionadas)]
+                st.dataframe(
+                    df_aging_filtrado[['Numero AWB', 'Nome do Motorista', 'Faixa D0-D3', 'Dias em Rota', 'Status do Registro', 'Cidade Destino', 'Ultima Movimentacao', 'Data/Hora Ultimo Scan']],
+                    use_container_width=True,
+                    hide_index=True
+                )
+
+        st.markdown("---")
+        st.subheader("Analise Visual e Detalhamento por Motorista")
+        
+        tab1, tab2, tab3, tab4 = st.tabs([
+            "AWBs em Aberto por Motorista", 
+            "Volume Total de AWBs por Motorista", 
+            "Media de Dias em Rota por Motorista",
+            "Aging por Motorista (D0 a >D3)"
+        ])
+        
+        df_motoristas = df_display[df_display['Nome do Motorista'] != 'Sem Motorista Atribuido']
+        
+        with tab1:
+            df_aberto = df_motoristas[df_motoristas['Status do Registro'].str.lower() == 'em aberto']
+            awb_aberto_per_driver = df_aberto['Nome do Motorista'].value_counts().reset_index()
+            awb_aberto_per_driver.columns = ['Nome do Motorista', 'AWBs em Aberto']
+            
+            fig0 = px.bar(
+                awb_aberto_per_driver, 
+                x='Nome do Motorista', 
+                y='AWBs em Aberto',
+                text='AWBs em Aberto',
+                title="Quantidade de AWBs Em Aberto por Motorista",
+                color='AWBs em Aberto',
+                color_continuous_scale='Reds'
+            )
+            fig0.update_layout(xaxis_tickangle=-45)
+            st.plotly_chart(fig0, use_container_width=True)
+            
+            st.markdown("---")
+            st.markdown("### Detalhar Entregas em Aberto")
+            lista_motoristas_pendentes = sorted(df_aberto['Nome do Motorista'].unique().tolist())
+            selected_driver = st.selectbox(
+                "Selecione o motorista para visualizar todas as suas entregas em aberto:",
+                options=lista_motoristas_pendentes,
+                index=0 if len(lista_motoristas_pendentes) > 0 else None
+            )
+            if selected_driver:
+                df_driver_pendente = df_aberto[df_aberto['Nome do Motorista'] == selected_driver]
+                col_d1, col_d2 = st.columns(2)
+                col_d1.subheader(f"Motorista: {selected_driver}")
+                col_d2.metric("Total de Entregas em Aberto", len(df_driver_pendente))
+                st.dataframe(
+                    df_driver_pendente[['Numero AWB', 'Faixa D0-D3', 'Dias em Rota', 'Ultima Movimentacao', 'Data/Hora Ultimo Scan', 'Cidade Destino']],
+                    use_container_width=True,
+                    hide_index=True
+                )
+
+        with tab2:
+            awb_per_driver = df_motoristas['Nome do Motorista'].value_counts().reset_index()
+            awb_per_driver.columns = ['Nome do Motorista', 'Quantidade de AWBs']
+            fig1 = px.bar(
+                awb_per_driver, 
+                x='Nome do Motorista', 
+                y='Quantidade de AWBs',
+                text='Quantidade de AWBs',
+                title="Total Geral de AWBs por Motorista",
+                color='Quantidade de AWBs',
+                color_continuous_scale='Blues'
+            )
+            fig1.update_layout(xaxis_tickangle=-45)
+            st.plotly_chart(fig1, use_container_width=True)
+            
+        with tab3:
+            days_per_driver = df_motoristas.groupby('Nome do Motorista')['Dias em Rota'].mean().reset_index()
+            days_per_driver.columns = ['Nome do Motorista', 'Media Dias em Rota']
+            days_per_driver = days_per_driver.sort_values(by='Media Dias em Rota', ascending=False)
+            fig2 = px.bar(
+                days_per_driver, 
+                x='Nome do Motorista', 
+                y='Media Dias em Rota',
+                text_auto='.1f',
+                title="Media de Dias em Rota por Motorista",
+                color='Media Dias em Rota',
+                color_continuous_scale='Oranges'
+            )
+            fig2.update_layout(xaxis_tickangle=-45)
+            st.plotly_chart(fig2, use_container_width=True)
+
+        with tab4:
+            df_aging_driver = df_motoristas.groupby(['Nome do Motorista', 'Faixa D0-D3']).size().reset_index(name='Quantidade')
+            fig3 = px.bar(
+                df_aging_driver,
+                x='Nome do Motorista',
+                y='Quantidade',
+                color='Faixa D0-D3',
+                title="Distribuição de Aging (D0, D1, D2, D3, >D3) por Motorista",
+                category_orders={'Faixa D0-D3': ['D0', 'D1', 'D2', 'D3', '> D3']}
+            )
+            fig3.update_layout(xaxis_tickangle=-45)
+            st.plotly_chart(fig3, use_container_width=True)
+
+    st.markdown("---")
+else:
+    st.info("Aguardando o supervisor carregar o ficheiro Excel (.xlsx) para partilhar os dados com a equipa.")
