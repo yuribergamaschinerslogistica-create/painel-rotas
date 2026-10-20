@@ -12,14 +12,10 @@ st.set_page_config(
 
 DATA_FILE = "dados_atuais.xlsx"
 
-def categorizar_dias(dias):
-    return 'D0'
-
 def tratar_dataframe(df_raw):
     df = df_raw.copy()
     df.columns = df.columns.str.strip()
     
-    # Mapeamento seguro para a nova estrutura de colunas
     if 'Número da Etiqueta' in df.columns:
         df['Número AWB'] = df['Número da Etiqueta'].astype(str)
     elif 'Waybill No' in df.columns:
@@ -172,6 +168,10 @@ if st.sidebar.button("Ver Painel Principal"):
     st.session_state["view_mode"] = "Painel Principal"
     st.rerun()
 
+if st.sidebar.button("Ver Painel Individual por Motorista"):
+    st.session_state["view_mode"] = "Painel Motoristas"
+    st.rerun()
+
 if st.sidebar.button("Ver AWBs Criticas em Destaque"):
     st.session_state["view_mode"] = "AWBs Criticas"
     st.rerun()
@@ -237,102 +237,81 @@ if os.path.exists(DATA_FILE):
     except Exception:
         df = None
 
-if df is not None:
+if df is not None and not df.empty:
     cols_desejadas = ['Número AWB', 'Nome do Motorista', 'Último Status', 'Cidade Destino', 'Data/Hora Última Leitura']
     cols_existentes = [c for c in cols_desejadas if c in df.columns]
     df_display = df[cols_existentes]
 
-    # --- CÁLCULOS GLOBAIS ANTES DOS FILTROS ---
+    # --- CÁLCULOS GLOBAIS ---
     total_geral = len(df_display)
     total_entregue = len(df_display[df_display['Último Status'].str.lower() == 'entregue']) if 'Último Status' in df_display.columns else 0
     total_em_rota = len(df_display[df_display['Último Status'].str.lower() == 'em rota de entrega']) if 'Último Status' in df_display.columns else 0
     total_insucesso = total_geral - (total_entregue + total_em_rota)
 
-    # --- FILTROS NA SIDEBAR ---
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("Filtros Globais")
-
-    # 1. Filtro por Cidade Destino
-    if 'Cidade Destino' in df_display.columns:
-        cidades_disponiveis = sorted(df_display['Cidade Destino'].astype(str).unique().tolist())
-        cidades_selecionadas = st.sidebar.multiselect(
-            "Filtrar por Cidade Destino:",
-            options=cidades_disponiveis,
-            default=cidades_disponiveis
-        )
-        if cidades_selecionadas:
-            df_display = df_display[df_display['Cidade Destino'].isin(cidades_selecionadas)]
-
-    # 2. Filtro por Último Status
-    if 'Último Status' in df_display.columns:
-        status_disponiveis = sorted(df_display['Último Status'].astype(str).unique().tolist())
-        status_selecionados = st.sidebar.multiselect(
-            "Filtrar por Último Status:",
-            options=status_disponiveis,
-            default=status_disponiveis
-        )
-        if status_selecionados:
-            df_display = df_display[df_display['Último Status'].isin(status_selecionados)]
-
-    if total_geral > 0:
-        pct_entregue = (total_entregue / total_geral) * 100
-        pct_em_rota = (total_em_rota / total_geral) * 100
-        pct_insucesso = (total_insucesso / total_geral) * 100
-
-        st.subheader("📊 Progresso Geral das Entregas")
-        st.markdown(
-            f"""
-            <div style="background-color: #ddd; border-radius: 8px; overflow: hidden; display: flex; height: 28px; width: 100%;">
-                <div style="width: {pct_entregue}%; background-color: #28a745; text-align: center; color: white; font-weight: bold; line-height: 28px; font-size: 13px;" title="Entregue: {total_entregue}">🟩 {pct_entregue:.1f}%</div>
-                <div style="width: {pct_em_rota}%; background-color: #ffc107; text-align: center; color: black; font-weight: bold; line-height: 28px; font-size: 13px;" title="Em rota: {total_em_rota}">🟨 {pct_em_rota:.1f}%</div>
-                <div style="width: {pct_insucesso}%; background-color: #dc3545; text-align: center; color: white; font-weight: bold; line-height: 28px; font-size: 13px;" title="Outros/Insucesso: {total_insucesso}">🟥 {pct_insucesso:.1f}%</div>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-        st.caption(f"Total: {total_geral} pacotes | 🟢 Entregues: {total_entregue} | 🟡 Em Rota: {total_em_rota} | 🟥 Outros/Insucesso: {total_insucesso}")
+    # --- TELA: PAINEL INDIVIDUAL POR MOTORISTA ---
+    if st.session_state["view_mode"] == "Painel Motoristas":
+        st.subheader("👤 Painel Individual por Motorista")
+        st.markdown("Acompanhamento do status de entregas por cada motorista em formato de cartões individuais:")
         st.markdown("---")
 
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Total de Pacotes", total_geral)
-    col2.metric("Motoristas Ativos", df_display[df_display['Nome do Motorista'] != 'Sem Motorista Atribuido']['Nome do Motorista'].nunique() if 'Nome do Motorista' in df_display.columns else 0)
-    col3.metric("Entregues", total_entregue)
-    col4.metric("Em Rota de Entrega", total_em_rota)
-    
-    st.markdown("---")
-    st.markdown("### 🔍 Pesquisa Rápida de AWB")
-    busca_global = st.text_input("Digite o número da AWB para localizar instantaneamente:", placeholder="Ex: 3320184118564")
-    
-    if busca_global and 'Número AWB' in df_display.columns:
-        df_resultado_busca = df_display[df_display['Número AWB'].astype(str).str.contains(busca_global, case=False, na=False)]
-        if len(df_resultado_busca) > 0:
-            st.success(f"Encontrado(s) {len(df_resultado_busca)} registo(s) para a AWB pesquisada:")
-            st.dataframe(df_resultado_busca, use_container_width=True, hide_index=True)
-        else:
-            st.warning("Nenhuma AWB encontrada com este número no histórico.")
-        st.markdown("---")
-
-    st.subheader("📋 Tabela de Acompanhamento e Detalhes")
-    st.dataframe(df_display, use_container_width=True, hide_index=True)
-
-    st.markdown("---")
-    st.subheader("📊 Análise Visual por Motorista")
-    
-    if 'Nome do Motorista' in df_display.columns and 'Último Status' in df_display.columns:
         df_motoristas = df_display[df_display['Nome do Motorista'] != 'Sem Motorista Atribuido']
-        if not df_motoristas.empty:
-            df_motorista_status = df_motoristas.groupby(['Nome do Motorista', 'Último Status']).size().reset_index(name='Quantidade')
-            fig = px.bar(
-                df_motorista_status,
-                x='Nome do Motorista',
-                y='Quantidade',
-                color='Último Status',
-                title="Volume de Pacotes por Motorista e Status",
-                color_discrete_map={'Entregue': '#28a745', 'Em rota de entrega': '#ffc107'}
-            )
-            fig.update_layout(xaxis_tickangle=-45)
-            st.plotly_chart(fig, use_container_width=True)
+        lista_motoristas = sorted(df_motoristas['Nome do Motorista'].unique().tolist())
 
-    st.markdown("---")
-else:
-    st.info("Aguardando o supervisor carregar a nova planilha (.xlsx) para partilhar os dados com a equipa.")
+        if lista_motoristas:
+            # Layout em grelha de 3 colunas
+            cols_per_row = 3
+            for i in range(0, len(lista_motoristas), cols_per_row):
+                row_cols = st.columns(cols_per_row)
+                for j in range(cols_per_row):
+                    if i + j < len(lista_motoristas):
+                        motorista = lista_motoristas[i + j]
+                        df_mot = df_motoristas[df_motoristas['Nome do Motorista'] == motorista]
+                        
+                        m_entregue = len(df_mot[df_mot['Último Status'].str.lower() == 'entregue'])
+                        m_em_rota = len(df_mot[df_mot['Último Status'].str.lower() == 'em rota de entrega'])
+                        m_anormal = len(df_mot) - (m_entregue + m_em_rota)
+                        
+                        with row_cols[j]:
+                            st.markdown(
+                                f"""
+                                <div style="background-color: #f8f9fa; border: 1px solid #ddd; border-radius: 10px; padding: 15px; margin-bottom: 15px; box-shadow: 2px 2px 5px rgba(0,0,0,0.05);">
+                                    <h4 style="text-align: center; color: #333; margin-bottom: 10px;">{motorista}</h4>
+                                </div>
+                                """,
+                                unsafe_allow_html=True
+                            )
+                            
+                            # Gráfico de Rosca (Donut) com Plotly
+                            df_pie = pd.DataFrame({
+                                'Status': ['Entregue', 'Em rota', 'Outros/Anormal'],
+                                'Quantidade': [m_entregue, m_em_rota, m_anormal]
+                            })
+                            fig_donut = px.pie(
+                                df_pie, 
+                                names='Status', 
+                                values='Quantidade', 
+                                hole=0.6,
+                                color='Status',
+                                color_discrete_map={
+                                    'Entregue': '#28a745', 
+                                    'Em rota': '#ffc107', 
+                                    'Outros/Anormal': '#dc3545'
+                                }
+                            )
+                            fig_donut.update_traces(textinfo='value', textfont_size=13, showlegend=False)
+                            fig_donut.update_layout(
+                                margin=dict(t=10, b=10, l=10, r=10),
+                                height=220,
+                                paper_bgcolor='rgba(0,0,0,0)',
+                                plot_bgcolor='rgba(0,0,0,0)'
+                            )
+                            st.plotly_chart(fig_donut, use_container_width=True, key=f"donut_{i+j}")
+                            
+                            st.markdown(
+                                f"""
+                                <div style="font-size: 13px; padding-left: 10px;">
+                                    🟢 Entregue: <b>{m_entregue}</b><br>
+                                    🟡 Em rota: <b>{m_em_rota}</b><br>
+                                    🔴 Outros/Anormal: <b>{m_anormal}</b>
+                                </div>
+                                ""
