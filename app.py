@@ -5,10 +5,15 @@ import json
 import os
 from datetime import datetime
 
-st.set_page_config(page_title="RS Logística - Painel Transportadoras", page_icon="🚚", layout="wide")
+st.set_page_config(
+    page_title="RS Logística - Painel Transportadoras",
+    page_icon="🚚",
+    layout="wide"
+)
 
 DIR_H = "historico_diario"
-if not os.path.exists(DIR_H): os.makedirs(DIR_H)
+if not os.path.exists(DIR_H):
+    os.makedirs(DIR_H)
 
 FILES = {
     "iMile": {"data": "dados_imile.xlsx", "prefix": "imile", "logo": "logo_imile.png"},
@@ -41,9 +46,11 @@ USERS_F = "users.json"
 def load_users():
     if not os.path.exists(USERS_F):
         d = {"admin": {"name": "Supervisor Geral", "password": "admin", "role": "Supervisor", "email": "admin@logistica.com", "phone": "0"}}
-        with open(USERS_F, "w", encoding="utf-8") as f: json.dump(d, f, indent=4, ensure_ascii=False)
+        with open(USERS_F, "w", encoding="utf-8") as f:
+            json.dump(d, f, indent=4, ensure_ascii=False)
         return d
-    with open(USERS_F, "r", encoding="utf-8") as f: return json.load(f)
+    with open(USERS_F, "r", encoding="utf-8") as f:
+        return json.load(f)
 
 users_db = load_users()
 
@@ -90,13 +97,15 @@ st.sidebar.markdown("---")
 st.sidebar.subheader("🚚 Transportadoras")
 col_l1, col_l2 = st.sidebar.columns(2)
 with col_l1:
-    if os.path.exists("logo_imile.png"): st.image("logo_imile.png", width=50)
+    if os.path.exists("logo_imile.png"):
+        st.image("logo_imile.png", width=50)
     if st.button("iMile", use_container_width=True):
         st.session_state["transportadora_ativa"] = "iMile"
         st.session_state["view_mode"] = "Painel Principal"
         st.rerun()
 with col_l2:
-    if os.path.exists("logo_anjun.png"): st.image("logo_anjun.png", width=50)
+    if os.path.exists("logo_anjun.png"):
+        st.image("logo_anjun.png", width=50)
     if st.button("Anjun", use_container_width=True):
         st.session_state["transportadora_ativa"] = "Anjun"
         st.session_state["view_mode"] = "Painel Principal"
@@ -104,9 +113,15 @@ with col_l2:
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("Navegacao")
-if st.sidebar.button("Painel Principal"): st.session_state["view_mode"] = "Painel Principal"; st.rerun()
-if st.sidebar.button("Painel por Motorista"): st.session_state["view_mode"] = "Painel Motoristas"; st.rerun()
-if st.sidebar.button("Histórico de Dias"): st.session_state["view_mode"] = "Historico"; st.rerun()
+if st.sidebar.button("Painel Principal"):
+    st.session_state["view_mode"] = "Painel Principal"
+    st.rerun()
+if st.sidebar.button("Painel por Motorista"):
+    st.session_state["view_mode"] = "Painel Motoristas"
+    st.rerun()
+if st.sidebar.button("Histórico de Dias"):
+    st.session_state["view_mode"] = "Historico"
+    st.rerun()
 
 if st.session_state["user_info"]["role"] == "Supervisor":
     st.sidebar.markdown("---")
@@ -121,7 +136,8 @@ if st.session_state["user_info"]["role"] == "Supervisor":
             if st.form_submit_button("Guardar"):
                 if nu and ns and nn:
                     users_db[nu] = {"name": nn, "password": ns, "role": nr, "email": ne, "phone": np}
-                    with open(USERS_F, "w", encoding="utf-8") as f: json.dump(users_db, f, indent=4, ensure_ascii=False)
+                    with open(USERS_F, "w", encoding="utf-8") as f:
+                        json.dump(users_db, f, indent=4, ensure_ascii=False)
                     st.sidebar.success("Cadastrado com sucesso!")
                 else:
                     st.sidebar.warning("Preencha os campos obrigatórios.")
@@ -132,7 +148,8 @@ data_file = cfg["data"]
 
 c_h1, c_h2 = st.columns([1, 8])
 with c_h1:
-    if os.path.exists(cfg["logo"]): st.image(cfg["logo"], width=80)
+    if os.path.exists(cfg["logo"]):
+        st.image(cfg["logo"], width=80)
 with c_h2:
     st.title(f"RS Logística - {t_atual}")
 st.markdown("---")
@@ -148,7 +165,9 @@ if st.session_state["view_mode"] == "Historico":
             st.dataframe(df_h, use_container_width=True, hide_index=True)
     else:
         st.info("Sem histórico encontrado.")
-    if st.button("⬅️ Voltar"): st.session_state["view_mode"] = "Painel Principal"; st.rerun()
+    if st.button("⬅️ Voltar"):
+        st.session_state["view_mode"] = "Painel Principal"
+        st.rerun()
 else:
     if st.session_state["user_info"]["role"] == "Supervisor":
         c_up, c_enc = st.columns([3, 1])
@@ -183,11 +202,15 @@ else:
 
     df = None
     if os.path.exists(data_file):
-        try: df = pd.read_excel(data_file)
-        except: df = None
+        try:
+            df = pd.read_excel(data_file)
+        except:
+            df = None
     elif os.path.exists("dados_atuais.xlsx"):
-        try: df = pd.read_excel("dados_atuais.xlsx")
-        except: df = None
+        try:
+            df = pd.read_excel("dados_atuais.xlsx")
+        except:
+            df = None
 
     if df is not None and not df.empty:
         if 'Data/Hora Última Leitura' in df.columns:
@@ -204,6 +227,117 @@ else:
         if 'Nome do Motorista' in df_disp.columns:
             mots = sorted(df_disp['Nome do Motorista'].astype(str).unique().tolist())
             m_s = st.sidebar.multiselect("Nome do Motorista:", options=mots, default=mots, key=f"m_filt_{t_atual}")
-            if m_s: df_disp = df_disp[df_disp['Nome do Motorista'].isin(m_s)]
+            if m_s:
+                df_disp = df_disp[df_disp['Nome do Motorista'].isin(m_s)]
 
-        if 'Cidade Destino' in df
+        if 'Cidade Destino' in df_disp.columns:
+            cids = sorted(df_disp['Cidade Destino'].astype(str).unique().tolist())
+            c_s = st.sidebar.multiselect("Cidade Destino:", options=cids, default=cids, key=f"c_{t_atual}")
+            if c_s:
+                df_disp = df_disp[df_disp['Cidade Destino'].isin(c_s)]
+
+        if 'Último Status' in df_disp.columns:
+            stats = sorted(df_disp['Último Status'].astype(str).unique().tolist())
+            s_s = st.sidebar.multiselect("Último Status:", options=stats, default=stats, key=f"s_{t_atual}")
+            if s_s:
+                df_disp = df_disp[df_disp['Último Status'].isin(s_s)]
+
+        tot = len(df_disp)
+        st_s = df_disp['Último Status'].astype(str).str.lower() if 'Último Status' in df_disp.columns else pd.Series([""] * tot)
+        
+        t_ent = int(st_s.str.contains('entregue', na=False).sum())
+        t_rot = int(st_s.str.contains('rota', na=False).sum())
+        t_out = tot - t_ent - t_rot
+        
+        p_ent = (t_ent / tot * 100) if tot > 0 else 0.0
+        p_rot = (t_rot / tot * 100) if tot > 0 else 0.0
+        p_out = (t_out / tot * 100) if tot > 0 else 0.0
+
+        oct_m = 0.0
+        if 'Hora de Criação' in df.columns and 'Data/Hora Última Leitura' in df.columns:
+            st_orig = df['Último Status'].astype(str).str.lower() if 'Último Status' in df.columns else pd.Series([""] * len(df))
+            df_oct = df[st_orig.str.contains('entregue', na=False) & df['Hora de Criação'].notna() & df['Data/Hora Última Leitura'].notna()]
+            if not df_oct.empty:
+                oct_m = ((df_oct['Data/Hora Última Leitura'] - df_oct['Hora de Criação']).dt.total_seconds() / 86400.0).mean()
+
+        if st.session_state["view_mode"] == "Painel Motoristas":
+            st.subheader(f"Painel por Motorista - {t_atual}")
+            bm = st.text_input("🔍 Procurar Motorista:", placeholder="Ex: Rodrigo")
+            st.markdown("---")
+
+            df_m_all = df_disp[df_disp['Nome do Motorista'] != 'Sem Motorista']
+            if bm:
+                df_m_all = df_m_all[df_m_all['Nome do Motorista'].astype(str).str.contains(bm, case=False, na=False)]
+
+            l_m = sorted(df_m_all['Nome do Motorista'].unique().tolist())
+            if l_m:
+                for i in range(0, len(l_m), 3):
+                    cols_r = st.columns(3)
+                    for j in range(3):
+                        if i + j < len(l_m):
+                            mot = l_m[i + j]
+                            df_mot = df_m_all[df_m_all['Nome do Motorista'] == mot]
+                            m_st = df_mot['Último Status'].astype(str).str.lower()
+                            me = int(m_st.str.contains('entregue', na=False).sum())
+                            mr = int(m_st.str.contains('rota', na=False).sum())
+                            mo = len(df_mot) - me - mr
+                            with cols_r[j]:
+                                with st.container(border=True):
+                                    st.markdown(f"**{mot}**")
+                                    fig = px.pie(
+                                        pd.DataFrame({'S': ['Entregue', 'Rota', 'Outros'], 'Q': [me, mr, mo]}),
+                                        names='S', values='Q', hole=0.6,
+                                        color='S', color_discrete_map={'Entregue': '#28a745', 'Rota': '#ffc107', 'Outros': '#dc3545'}
+                                    )
+                                    fig.update_traces(textinfo='value', showlegend=False)
+                                    fig.update_layout(margin=dict(t=5, b=5, l=5, r=5), height=160, paper_bgcolor='rgba(0,0,0,0)')
+                                    st.plotly_chart(fig, use_container_width=True, key=f"p_{t_atual}_{i+j}")
+                                    st.write(f"Entregues: {me} | Rota: {mr} | Outros: {mo}")
+            else:
+                st.info("Nenhum motorista encontrado.")
+
+            st.markdown("---")
+            if st.button("Voltar"):
+                st.session_state["view_mode"] = "Painel Principal"
+                st.rerun()
+        else:
+            if tot > 0:
+                st.subheader(f"Progresso Geral - {t_atual}")
+                st.markdown(
+                    f"""
+                    <div style="background-color: #ddd; border-radius: 8px; overflow: hidden; display: flex; height: 28px; width: 100%;">
+                        <div style="width: {p_ent}%; background-color: #28a745; text-align: center; color: white; font-weight: bold; line-height: 28px; font-size: 13px;">Entregue: {p_ent:.1f}%</div>
+                        <div style="width: {p_rot}%; background-color: #ffc107; text-align: center; color: black; font-weight: bold; line-height: 28px; font-size: 13px;">Em rota: {p_rot:.1f}%</div>
+                        <div style="width: {p_out}%; background-color: #dc3545; text-align: center; color: white; font-weight: bold; line-height: 28px; font-size: 13px;">Outros: {p_out:.1f}%</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+                st.caption(f"Total: {tot} pacotes | Entregues: {t_ent} | Em Rota: {t_rot} | Outros: {t_out}")
+                st.markdown("---")
+
+            c1, c2, c3, c4, c5, c6, c7 = st.columns(7)
+            c1.metric("Total", tot)
+            c2.metric("Motoristas", df_disp[df_disp['Nome do Motorista'] != 'Sem Motorista']['Nome do Motorista'].nunique())
+            c3.metric("Entregues", t_ent)
+            c4.metric("Em Rota", t_rot)
+            c5.metric("SLA", f"{p_ent:.1f}%")
+            c6.metric("OTIF", f"{p_ent:.1f}%")
+            c7.metric("OCT", f"{oct_m:.1f} dias")
+            
+            st.markdown("---")
+            st.subheader("Pesquisa AWB")
+            bg = st.text_input("Número da AWB:", key=f"search_{t_atual}")
+            if bg:
+                df_res = df_disp[df_disp['Número AWB'].astype(str).str.contains(bg, case=False, na=False)]
+                if not df_res.empty:
+                    st.success(f"{len(df_res)} registo(s) encontrado(s):")
+                    st.dataframe(df_res, use_container_width=True, hide_index=True)
+                else:
+                    st.warning("Não encontrado.")
+                st.markdown("---")
+
+            st.subheader(f"Tabela de Acompanhamento - {t_atual}")
+            st.dataframe(df_disp, use_container_width=True, hide_index=True)
+    else:
+        st.info(f"Aguardando carregamento da planilha da **{t_atual}** para iniciar o dia.")
