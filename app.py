@@ -82,7 +82,6 @@ if "transportadora_ativa" not in st.session_state:
 if "view_mode" not in st.session_state:
     st.session_state["view_mode"] = "Painel Principal"
 
-# --- TELA DE LOGIN COM ABA "ESQUECI A SENHA" ---
 if not st.session_state["logged_in"]:
     if os.path.exists("logo_base.png"):
         st.image("logo_base.png", width=220)
@@ -161,7 +160,6 @@ if st.sidebar.button("👥 Colaboradores Cadastrados"):
     st.session_state["view_mode"] = "Colaboradores"
     st.rerun()
 
-# --- GESTÃO DE COLABORADORES E REDEFINIÇÃO DE SENHAS (SUPERVISOR) ---
 if st.session_state["user_info"]["role"] == "Supervisor":
     st.sidebar.markdown("---")
     with st.sidebar.expander("Cadastrar Novo Colaborador"):
@@ -259,7 +257,7 @@ else:
                     st.error(f"Erro: {e}")
         with c_enc:
             st.write("")
-            with st.expander(f"🔒 Encerrar Dia"):
+            with st.expander("🔒 Encerrar Dia"):
                 with st.form("form_enc"):
                     pass_c = st.text_input("Senha Supervisor:", type="password")
                     if st.form_submit_button("Confirmar Fecho"):
@@ -326,15 +324,4 @@ else:
         t_rot = int(st_s.str.contains('rota', na=False).sum())
         t_out = tot - t_ent - t_rot
         
-        p_ent = (t_ent / tot * 100) if tot > 0 else 0.0
-        p_rot = (t_rot / tot * 100) if tot > 0 else 0.0
-        p_out = (t_out / tot * 100) if tot > 0 else 0.0
-
-        oct_m = 0.0
-        if 'Hora de Criação' in df.columns and 'Data/Hora Última Leitura' in df.columns:
-            st_orig = df['Último Status'].astype(str).str.lower() if 'Último Status' in df.columns else pd.Series([""] * len(df))
-            df_oct = df[st_orig.str.contains('entregue', na=False) & df['Hora de Criação'].notna() & df['Data/Hora Última Leitura'].notna()]
-            if not df_oct.empty:
-                oct_m = ((df_oct['Data/Hora Última Leitura'] - df_oct['Hora de Criação']).dt.total_seconds() / 86400.0).mean()
-
-        if st.session_state["view_mode"] == "Painel
+        p_ent = (t_ent / tot * 100) if tot > 0 else 0
