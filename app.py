@@ -241,18 +241,18 @@ else:
             st.write("")
             with st.expander("Encerrar Dia"):
                 with st.form("f_enc"):
-                    pc = st.text_input("Senha:", type="password")
-                    if st.form_submit_button("Confirmar"):
+                    pc = st.text_input("Digite a Senha do Supervisor:", type="password")
+                    if st.form_submit_button("Confirmar Fecho"):
                         k = st.session_state.get("username_key", "")
                         db = load_users()
                         if k in db and db[k]["password"] == pc:
                             if os.path.exists(data_file):
                                 dh = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
                                 os.rename(data_file, os.path.join(DIR_H, f"{cfg['prefix']}_fechamento_{dh}.xlsx"))
-                                st.success("Encerrado!")
+                                st.success("Dia encerrado e arquivado com sucesso!")
                                 st.rerun()
                             else:
-                                st.warning("Sem dados.")
+                                st.warning("Sem dados ativos para encerrar.")
                         else:
                             st.error("Senha incorreta.")
 
@@ -297,32 +297,4 @@ else:
 
         if tot > 0:
             st.subheader(f"Progresso - {t_atual}")
-            st.markdown(f'<div style="background-color: #ddd; border-radius: 8px; overflow: hidden; display: flex; height: 28px; width: 100%;"><div style="width: {p_ent}%; background-color: #28a745; text-align: center; color: white; font-weight: bold; line-height: 28px; font-size: 13px;">Entregue: {p_ent:.1f}%</div><div style="width: {p_rot}%; background-color: #ffc107; text-align: center; color: black; font-weight: bold; line-height: 28px; font-size: 13px;">Em rota: {p_rot:.1f}%</div><div style="width: {p_out}%; background-color: #dc3545; text-align: center; color: white; font-weight: bold; line-height: 28px; font-size: 13px;">Outros: {p_out:.1f}%</div></div>', unsafe_allow_html=True)
-            st.caption(f"Total: {tot} | Entregues: {t_ent} | Em Rota: {t_rot} | Outros: {t_out}")
-            st.markdown("---")
-
-        c1, c2, c3, c4, c5, c6, c7 = st.columns(7)
-        c1.metric("Total", tot)
-        c2.metric("Motoristas", df_disp[df_disp['Nome do Motorista'] != 'Sem Motorista']['Nome do Motorista'].nunique())
-        c3.metric("Entregues", t_ent)
-        c4.metric("Em Rota", t_rot)
-        c5.metric("SLA", f"{p_ent:.1f}%")
-        c6.metric("OTIF", f"{p_ent:.1f}%")
-        c7.metric("OCT", f"{oct_m:.1f} dias")
-        
-        st.markdown("---")
-        st.subheader("Pesquisa AWB")
-        bg = st.text_input("AWB:", key=f"srch_{t_atual}")
-        if bg:
-            df_res = df_disp[df_disp['Número AWB'].astype(str).str.contains(bg, case=False, na=False)]
-            if not df_res.empty:
-                st.success(f"{len(df_res)} encontrado(s):")
-                st.dataframe(df_res, use_container_width=True, hide_index=True)
-            else:
-                st.warning("Não encontrado.")
-            st.markdown("---")
-
-        st.subheader(f"Tabela - {t_atual}")
-        st.dataframe(df_disp, use_container_width=True, hide_index=True)
-    else:
-        st.info(f"Aguardando carregamento da planilha da **{t_atual}**.")
+            st.markdown(f'<div style="background-color: #ddd; border-radius: 8px; overflow: hidden; display: flex; height:
