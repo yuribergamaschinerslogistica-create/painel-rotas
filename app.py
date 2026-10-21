@@ -155,17 +155,21 @@ with c_h2:
 st.markdown("---")
 
 if st.session_state["view_mode"] == "Historico":
-    st.subheader(f"📚 Histórico - {t_atual}")
-    arq = sorted([f for f in os.listdir(DIR_H) if f.startswith(cfg["prefix"]) and f.endswith('.xlsx')], reverse=True)
-    if arq:
-        sel = st.selectbox("Ficheiro anterior:", options=arq)
+    st.subheader(f"📚 Histórico de Dias - {t_atual}")
+    prefixo = cfg["prefix"]
+    arquivos = sorted([f for f in os.listdir(DIR_H) if prefixo in f and f.endswith('.xlsx')], reverse=True)
+    if arquivos:
+        sel = st.selectbox("Selecione o dia anterior:", options=arquivos)
         if sel:
-            df_h = pd.read_excel(os.path.join(DIR_H, sel))
-            st.success(f"Registos: {len(df_h)}")
+            c_caminho = os.path.join(DIR_H, sel)
+            df_h = pd.read_excel(c_caminho)
+            st.success(f"Ficheiro: {sel} | Total de Registos: {len(df_h)}")
             st.dataframe(df_h, use_container_width=True, hide_index=True)
     else:
-        st.info("Sem histórico encontrado.")
-    if st.button("⬅️ Voltar"):
+        st.info(f"Nenhum histórico guardado para **{t_atual}**. Utilize o botão '🔒 Encerrar Dia' no painel principal para arquivar os dados atuais.")
+    
+    st.markdown("---")
+    if st.button("⬅️ Voltar ao Painel Principal"):
         st.session_state["view_mode"] = "Painel Principal"
         st.rerun()
 else:
@@ -186,17 +190,18 @@ else:
             st.write("")
             with st.expander(f"🔒 Encerrar Dia"):
                 with st.form("form_enc"):
-                    pass_c = st.text_input("Senha:", type="password")
-                    if st.form_submit_button("Confirmar"):
+                    pass_c = st.text_input("Senha Supervisor:", type="password")
+                    if st.form_submit_button("Confirmar Fecho"):
                         k = st.session_state.get("username_key", "")
                         if k in users_db and users_db[k]["password"] == pass_c:
                             if os.path.exists(data_file):
                                 dh = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                                os.rename(data_file, os.path.join(DIR_H, f"{cfg['prefix']}_fechamento_{dh}.xlsx"))
-                                st.success("Dia encerrado!")
+                                novo_nome = f"{cfg['prefix']}_fechamento_{dh}.xlsx"
+                                os.rename(data_file, os.path.join(DIR_H, novo_nome))
+                                st.success("Dia encerrado e arquivado no histórico com sucesso!")
                                 st.rerun()
                             else:
-                                st.warning("Sem dados.")
+                                st.warning("Não existem dados ativos para encerrar.")
                         else:
                             st.error("Senha incorreta.")
 
