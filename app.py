@@ -215,4 +215,114 @@ elif modo == "Motoristas":
                                 fig = px.pie(pd.DataFrame({'S': ['Entregue', 'Rota', 'Outros'], 'Q': [me, mr, mo]}), names='S', values='Q', hole=0.6, color='S', color_discrete_map={'Entregue': '#28a745', 'Rota': '#ffc107', 'Outros': '#dc3545'})
                                 fig.update_traces(textinfo='value', showlegend=False)
                                 fig.update_layout(margin=dict(t=5, b=5, l=5, r=5), height=160, paper_bgcolor='rgba(0,0,0,0)')
-                                st.plotly
+                                st.plotly_chart(fig, use_container_width=True, key=f"pie_{t_atual}_{i+j}")
+                                st.write(f"Entregues: {me} | Rota: {mr} | Outros: {mo}")
+        else:
+            st.info("Nenhum motorista.")
+    else:
+        st.info("Sem dados.")
+    if st.button("Voltar"): st.session_state["view_mode"] = "Principal"; st.rerun()
+
+else:
+    if st.session_state["user_info"]["role"] == "Supervisor":
+        cup, cenc = st.columns([3, 1])
+        with cup:
+            up = st.file_uploader(f"Carregar Planilha da {t_atual} (.xlsx)", type=["xlsx", "xls"])
+            if up is not None:
+                try:
+                    df_r = pd.read_excel(up, sheet_name=0)
+                    df_p = tratar_imile(df_r) if t_atual == "iMile" else tratar_anjun(df_r)
+                    df_p.to_excel(data_file, index=False)
+                    st.success("Carregado com sucesso!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erro: {e}")
+        with cenc:
+            st.write("")
+            with st.expander("Encerrar Dia"):
+                with st.form("f_enc"):
+                    pc = st.text_input("Senha:", type="password")
+                    if st.form_submit_button("Confirmar"):
+                        k = st.session_state.get("username_key", "")
+                        db = load_users()
+                        if k in db and db[k]["password"] == pc:
+                            if os.path.exists(data_file):
+                                dh = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                                os.rename(data_file, os.path.join(DIR_H, f"{cfg['prefix']}_fechamento_{dh}.xlsx"))
+                                st.success("Encerrado!")
+                                st.rerun()
+                            else:
+                                st.warning("Sem dados.")
+                        else:
+                            st.error("Senha incorreta.")
+
+    df = pd.read_excel(data_file) if os.path.exists(data_file) else None
+    if df is not None and not df.empty:
+        if 'Data/Hora Última Leitura' in df.columns: df['Data/Hora Última Leitura'] = pd.to_datetime(df['Data/Hora Última Leitura'], errors='coerce')
+        if 'Hora de Criação' in df.columns: df['Hora de Criação'] = pd.to_datetime(df['Hora de Criação'], errors='coerce')
+
+        cols = ['Número AWB', 'Nome do Motorista', 'Último Status', 'Cidade Destino', 'Data/Hora Última Leitura', 'Hora de Criação']
+        df_disp = df[[c for c in cols if c in df.columns]]
+
+        st.sidebar.markdown("---")
+        st.sidebar.subheader("Filtros")
+        if 'Nome do Motorista' in df_disp.columns:
+            mots = sorted(df_disp['Nome do Motorista'].astype(str).unique().tolist())
+            ms = st.sidebar.multiselect("Motorista:", options=mots, default=mots, key=f"m_{t_atual}")
+            if ms: df_disp = df_disp[df_disp['Nome do Motorista'].isin(ms)]
+        if 'Cidade Destino' in df_disp.columns:
+            cids = sorted(df_disp['Cidade Destino'].astype(str).unique().tolist())
+            cs = st.sidebar.multiselect("Cidade:", options=cids, default=cids, key=f"c_{t_atual}")
+            if cs: df_disp = df_disp[df_disp['Cidade Destino'].isin(cs)]
+        if 'Último Status' in df_disp.columns:
+            stats = sorted(df_disp['Último Status'].astype(str).unique().tolist())
+            ss = st.sidebar.multiselect("Status:", options=stats, default=stats, key=f"s_{t_atual}")
+            if ss: df_disp = df_disp[df_disp['Último Status'].isin(ss)]
+
+        tot = len(df_disp)
+        st_s = df_disp['Último Status'].astype(str).str.lower() if 'Último Status' in df_disp.columns else pd.Series([""] * tot)
+        t_ent = int(st_s.str.contains('entregue', na=False).sum())
+        t_rot = int(st_s.str.contains('rota', na=False).sum())
+        t_out = tot - t_ent - t_rot
+        p_ent = (t_ent / tot * 100) if tot > 0 else 0.0
+        p_rot = (t_rot / tot * 100) if tot > 0 else 0.0
+        p_out = (t_out / tot * 100) if tot > 0 else 0.0
+
+        oct_m = 0.0
+        if 'Hora de Criação' in df.columns and 'Data/Hora Última Leitura' in df.columns:
+            st_orig = df['Último Status'].astype(str).str.lower() if 'Último Status' in df.columns else pd.Series([""] * len(df))
+            df_oct = df[st_orig.str.contains('entregue', na=False) & df['Hora de Criação'].notna() & df['Data/Hora Última Leitura'].notna()]
+            if not df_oct.empty:
+                oct_m = ((df_oct['Data/Hora Última Leitura'] - df_oct['Hora de Criação']).dt.total_seconds() / 86400.0).mean()
+
+        if tot > 0:
+            st.subheader(f"Progresso - {t_atual}")
+            st.markdown(f'<div style="background-color: #ddd; border-radius: 8px; overflow: hidden; display: flex; height: 28px; width: 100%;"><div style="width: {p_ent}%; background-color: #28a745; text-align: center; color: white; font-weight: bold; line-height: 28px; font-size: 13px;">Entregue: {p_ent:.1f}%</div><div style="width: {p_rot}%; background-color: #ffc107; text-align: center; color: black; font-weight: bold; line-height: 28px; font-size: 13px;">Em rota: {p_rot:.1f}%</div><div style="width: {p_out}%; background-color: #dc3545; text-align: center; color: white; font-weight: bold; line-height: 28px; font-size: 13px;">Outros: {p_out:.1f}%</div></div>', unsafe_allow_html=True)
+            st.caption(f"Total: {tot} | Entregues: {t_ent} | Em Rota: {t_rot} | Outros: {t_out}")
+            st.markdown("---")
+
+        c1, c2, c3, c4, c5, c6, c7 = st.columns(7)
+        c1.metric("Total", tot)
+        c2.metric("Motoristas", df_disp[df_disp['Nome do Motorista'] != 'Sem Motorista']['Nome do Motorista'].nunique())
+        c3.metric("Entregues", t_ent)
+        c4.metric("Em Rota", t_rot)
+        c5.metric("SLA", f"{p_ent:.1f}%")
+        c6.metric("OTIF", f"{p_ent:.1f}%")
+        c7.metric("OCT", f"{oct_m:.1f} dias")
+        
+        st.markdown("---")
+        st.subheader("Pesquisa AWB")
+        bg = st.text_input("AWB:", key=f"srch_{t_atual}")
+        if bg:
+            df_res = df_disp[df_disp['Número AWB'].astype(str).str.contains(bg, case=False, na=False)]
+            if not df_res.empty:
+                st.success(f"{len(df_res)} encontrado(s):")
+                st.dataframe(df_res, use_container_width=True, hide_index=True)
+            else:
+                st.warning("Não encontrado.")
+            st.markdown("---")
+
+        st.subheader(f"Tabela - {t_atual}")
+        st.dataframe(df_disp, use_container_width=True, hide_index=True)
+    else:
+        st.info(f"Aguardando carregamento da planilha da **{t_atual}**.")
