@@ -77,7 +77,7 @@ if "transportadora_ativa" not in st.session_state:
 if "view_mode" not in st.session_state:
     st.session_state["view_mode"] = "Painel Principal"
 
-# --- TELA DE LOGIN COM ESQUECI A SENHA ---
+# --- TELA DE LOGIN COM ABA "ESQUECI A SENHA" ---
 if not st.session_state["logged_in"]:
     if os.path.exists("logo_base.png"):
         st.image("logo_base.png", width=220)
@@ -102,8 +102,8 @@ if not st.session_state["logged_in"]:
                         st.error("Utilizador ou senha incorretos.")
         
         with tab_esqueci:
-            st.info("Insira o seu nome de utilizador para consultar a sua senha ou contacte o Supervisor Geral da base.")
-            u_rec = st.text_input("Utilizador para recuperar:")
+            st.info("Insira o seu nome de utilizador para consultar a sua senha ou contacte o Supervisor Geral.")
+            u_rec = st.text_input("Utilizador:")
             if st.button("Consultar Senha"):
                 users_db = load_users()
                 if u_rec in users_db:
@@ -156,7 +156,7 @@ if st.sidebar.button("👥 Colaboradores Cadastrados"):
     st.session_state["view_mode"] = "Colaboradores"
     st.rerun()
 
-# --- GESTÃO E CADASTRO DE COLABORADORES PELO SUPERVISOR ---
+# --- GESTÃO DE COLABORADORES E REDEFINIÇÃO DE SENHAS (SUPERVISOR) ---
 if st.session_state["user_info"]["role"] == "Supervisor":
     st.sidebar.markdown("---")
     with st.sidebar.expander("Cadastrar Novo Colaborador"):
@@ -176,16 +176,16 @@ if st.session_state["user_info"]["role"] == "Supervisor":
                 else:
                     st.sidebar.warning("Preencha os campos obrigatórios.")
 
-    with st.sidebar.expander("🔑 Redefinir Senha de Colaborador"):
+    with st.sidebar.expander("🔑 Redefinir Senha"):
         with st.form("reset_pass_form"):
             users_db = load_users()
-            sel_user = st.selectbox("Selecione o Utilizador:", options=list(users_db.keys()))
+            sel_user = st.selectbox("Utilizador:", options=list(users_db.keys()))
             nova_senha = st.text_input("Nova Senha:", type="password")
             if st.form_submit_button("Atualizar Senha"):
                 if nova_senha:
                     users_db[sel_user]["password"] = nova_senha
                     save_users(users_db)
-                    st.sidebar.success(f"Senha de '{sel_user}' atualizada com sucesso!")
+                    st.sidebar.success(f"Senha de '{sel_user}' atualizada!")
                 else:
                     st.sidebar.warning("Introduza a nova senha.")
 
@@ -365,51 +365,4 @@ else:
                                     fig.update_layout(margin=dict(t=5, b=5, l=5, r=5), height=160, paper_bgcolor='rgba(0,0,0,0)')
                                     st.plotly_chart(fig, use_container_width=True, key=f"p_{t_atual}_{i+j}")
                                     st.write(f"Entregues: {me} | Rota: {mr} | Outros: {mo}")
-            else:
-                st.info("Nenhum motorista encontrado.")
-
-            st.markdown("---")
-            if st.button("Voltar"):
-                st.session_state["view_mode"] = "Painel Principal"
-                st.rerun()
-        else:
-            if tot > 0:
-                st.subheader(f"Progresso Geral - {t_atual}")
-                st.markdown(
-                    f"""
-                    <div style="background-color: #ddd; border-radius: 8px; overflow: hidden; display: flex; height: 28px; width: 100%;">
-                        <div style="width: {p_ent}%; background-color: #28a745; text-align: center; color: white; font-weight: bold; line-height: 28px; font-size: 13px;">Entregue: {p_ent:.1f}%</div>
-                        <div style="width: {p_rot}%; background-color: #ffc107; text-align: center; color: black; font-weight: bold; line-height: 28px; font-size: 13px;">Em rota: {p_rot:.1f}%</div>
-                        <div style="width: {p_out}%; background-color: #dc3545; text-align: center; color: white; font-weight: bold; line-height: 28px; font-size: 13px;">Outros: {p_out:.1f}%</div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True
-                )
-                st.caption(f"Total: {tot} pacotes | Entregues: {t_ent} | Em Rota: {t_rot} | Outros: {t_out}")
-                st.markdown("---")
-
-            c1, c2, c3, c4, c5, c6, c7 = st.columns(7)
-            c1.metric("Total", tot)
-            c2.metric("Motoristas", df_disp[df_disp['Nome do Motorista'] != 'Sem Motorista']['Nome do Motorista'].nunique())
-            c3.metric("Entregues", t_ent)
-            c4.metric("Em Rota", t_rot)
-            c5.metric("SLA", f"{p_ent:.1f}%")
-            c6.metric("OTIF", f"{p_ent:.1f}%")
-            c7.metric("OCT", f"{oct_m:.1f} dias")
-            
-            st.markdown("---")
-            st.subheader("Pesquisa AWB")
-            bg = st.text_input("Número da AWB:", key=f"search_{t_atual}")
-            if bg:
-                df_res = df_disp[df_disp['Número AWB'].astype(str).str.contains(bg, case=False, na=False)]
-                if not df_res.empty:
-                    st.success(f"{len(df_res)} registo(s) encontrado(s):")
-                    st.dataframe(df_res, use_container_width=True, hide_index=True)
-                else:
-                    st.warning("Não encontrado.")
-                st.markdown("---")
-
-            st.subheader(f"Tabela de Acompanhamento - {t_atual}")
-            st.dataframe(df_disp, use_container_width=True, hide_index=True)
-    else:
-        st.info(f"Aguardando carregamento da planilha da **{t_atual}** para iniciar o dia.")
+            else
