@@ -52,6 +52,13 @@ def load_users():
                 "role": "Supervisor", 
                 "email": "admin@logistica.com", 
                 "phone": "000000000"
+            },
+            "yuri": {
+                "name": "Yuri Bergamaschine", 
+                "password": "123", 
+                "role": "Supervisor", 
+                "email": "yuri@logistica.com", 
+                "phone": "000000000"
             }
         }
         with open(USERS_F, "w", encoding="utf-8") as f:
@@ -365,4 +372,51 @@ else:
                                     fig.update_layout(margin=dict(t=5, b=5, l=5, r=5), height=160, paper_bgcolor='rgba(0,0,0,0)')
                                     st.plotly_chart(fig, use_container_width=True, key=f"p_{t_atual}_{i+j}")
                                     st.write(f"Entregues: {me} | Rota: {mr} | Outros: {mo}")
-            else
+            else:
+                st.info("Nenhum motorista encontrado.")
+
+            st.markdown("---")
+            if st.button("Voltar"):
+                st.session_state["view_mode"] = "Painel Principal"
+                st.rerun()
+        else:
+            if tot > 0:
+                st.subheader(f"Progresso Geral - {t_atual}")
+                st.markdown(
+                    f"""
+                    <div style="background-color: #ddd; border-radius: 8px; overflow: hidden; display: flex; height: 28px; width: 100%;">
+                        <div style="width: {p_ent}%; background-color: #28a745; text-align: center; color: white; font-weight: bold; line-height: 28px; font-size: 13px;">Entregue: {p_ent:.1f}%</div>
+                        <div style="width: {p_rot}%; background-color: #ffc107; text-align: center; color: black; font-weight: bold; line-height: 28px; font-size: 13px;">Em rota: {p_rot:.1f}%</div>
+                        <div style="width: {p_out}%; background-color: #dc3545; text-align: center; color: white; font-weight: bold; line-height: 28px; font-size: 13px;">Outros: {p_out:.1f}%</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True
+                )
+                st.caption(f"Total: {tot} pacotes | Entregues: {t_ent} | Em Rota: {t_rot} | Outros: {t_out}")
+                st.markdown("---")
+
+            c1, c2, c3, c4, c5, c6, c7 = st.columns(7)
+            c1.metric("Total", tot)
+            c2.metric("Motoristas", df_disp[df_disp['Nome do Motorista'] != 'Sem Motorista']['Nome do Motorista'].nunique())
+            c3.metric("Entregues", t_ent)
+            c4.metric("Em Rota", t_rot)
+            c5.metric("SLA", f"{p_ent:.1f}%")
+            c6.metric("OTIF", f"{p_ent:.1f}%")
+            c7.metric("OCT", f"{oct_m:.1f} dias")
+            
+            st.markdown("---")
+            st.subheader("Pesquisa AWB")
+            bg = st.text_input("Número da AWB:", key=f"search_{t_atual}")
+            if bg:
+                df_res = df_disp[df_disp['Número AWB'].astype(str).str.contains(bg, case=False, na=False)]
+                if not df_res.empty:
+                    st.success(f"{len(df_res)} registo(s) encontrado(s):")
+                    st.dataframe(df_res, use_container_width=True, hide_index=True)
+                else:
+                    st.warning("Não encontrado.")
+                st.markdown("---")
+
+            st.subheader(f"Tabela de Acompanhamento - {t_atual}")
+            st.dataframe(df_disp, use_container_width=True, hide_index=True)
+    else:
+        st.info(f"Aguardando carregamento da planilha da **{t_atual}** para iniciar o dia.")
