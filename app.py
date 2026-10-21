@@ -44,31 +44,36 @@ def tratar_anjun(df_r):
 
 USERS_F = "users.json"
 def load_users():
-    if not os.path.exists(USERS_F):
-        d = {
-            "admin": {
-                "name": "Supervisor Geral", 
-                "password": "admin", 
-                "role": "Supervisor", 
-                "email": "admin@logistica.com", 
-                "phone": "000000000"
-            },
-            "yuri": {
-                "name": "Yuri Bergamaschine", 
-                "password": "123", 
-                "role": "Supervisor", 
-                "email": "yuri@logistica.com", 
-                "phone": "000000000"
-            }
+    default_users = {
+        "admin": {
+            "name": "Supervisor Geral", 
+            "password": "admin", 
+            "role": "Supervisor", 
+            "email": "admin@logistica.com", 
+            "phone": "000000000"
+        },
+        "yuri": {
+            "name": "Yuri Bergamaschine", 
+            "password": "123", 
+            "role": "Supervisor", 
+            "email": "yuri@logistica.com", 
+            "phone": "000000000"
         }
+    }
+    if not os.path.exists(USERS_F):
         with open(USERS_F, "w", encoding="utf-8") as f:
-            json.dump(d, f, indent=4, ensure_ascii=False)
-        return d
-    with open(USERS_F, "r", encoding="utf-8") as f:
-        try:
-            return json.load(f)
-        except:
-            return {}
+            json.dump(default_users, f, indent=4, ensure_ascii=False)
+        return default_users
+    try:
+        with open(USERS_F, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            # Garante que os utilizadores principais nunca faltam
+            for k, v in default_users.items():
+                if k not in data:
+                    data[k] = v
+            return data
+    except:
+        return default_users
 
 def save_users(users):
     with open(USERS_F, "w", encoding="utf-8") as f:
