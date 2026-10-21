@@ -45,12 +45,27 @@ def tratar_anjun(df_r):
 USERS_F = "users.json"
 def load_users():
     if not os.path.exists(USERS_F):
-        d = {"admin": {"name": "Supervisor Geral", "password": "admin", "role": "Supervisor", "email": "admin@logistica.com", "phone": "0"}}
+        d = {
+            "admin": {
+                "name": "Supervisor Geral", 
+                "password": "admin", 
+                "role": "Supervisor", 
+                "email": "admin@logistica.com", 
+                "phone": "000000000"
+            }
+        }
         with open(USERS_F, "w", encoding="utf-8") as f:
             json.dump(d, f, indent=4, ensure_ascii=False)
         return d
     with open(USERS_F, "r", encoding="utf-8") as f:
-        return json.load(f)
+        try:
+            return json.load(f)
+        except:
+            return {}
+
+def save_users(users):
+    with open(USERS_F, "w", encoding="utf-8") as f:
+        json.dump(users, f, indent=4, ensure_ascii=False)
 
 users_db = load_users()
 
@@ -62,6 +77,7 @@ if "transportadora_ativa" not in st.session_state:
 if "view_mode" not in st.session_state:
     st.session_state["view_mode"] = "Painel Principal"
 
+# --- TELA DE LOGIN COM ESQUECI A SENHA ---
 if not st.session_state["logged_in"]:
     if os.path.exists("logo_base.png"):
         st.image("logo_base.png", width=220)
@@ -69,17 +85,31 @@ if not st.session_state["logged_in"]:
     st.markdown("---")
     _, c_mid, _ = st.columns([1, 2, 1])
     with c_mid:
-        with st.form("login"):
-            u = st.text_input("Utilizador")
-            p = st.text_input("Senha", type="password")
-            if st.form_submit_button("Entrar"):
-                if u in users_db and users_db[u]["password"] == p:
-                    st.session_state["logged_in"] = True
-                    st.session_state["username_key"] = u
-                    st.session_state["user_info"] = users_db[u]
-                    st.rerun()
+        tab_login, tab_esqueci = st.tabs(["🔐 Entrar", "❓ Esqueci a Senha"])
+        
+        with tab_login:
+            with st.form("login"):
+                u = st.text_input("Utilizador")
+                p = st.text_input("Senha", type="password")
+                if st.form_submit_button("Entrar"):
+                    users_db = load_users()
+                    if u in users_db and users_db[u]["password"] == p:
+                        st.session_state["logged_in"] = True
+                        st.session_state["username_key"] = u
+                        st.session_state["user_info"] = users_db[u]
+                        st.rerun()
+                    else:
+                        st.error("Utilizador ou senha incorretos.")
+        
+        with tab_esqueci:
+            st.info("Insira o seu nome de utilizador para consultar a sua senha ou contacte o Supervisor Geral da base.")
+            u_rec = st.text_input("Utilizador para recuperar:")
+            if st.button("Consultar Senha"):
+                users_db = load_users()
+                if u_rec in users_db:
+                    st.success(f"A senha para o utilizador **{u_rec}** é: `{users_db[u_rec]['password']}`")
                 else:
-                    st.error("Dados incorretos.")
+                    st.warning("Utilizador não encontrado.")
     st.stop()
 
 if os.path.exists("logo_base.png"):
@@ -122,7 +152,11 @@ if st.sidebar.button("Painel por Motorista"):
 if st.sidebar.button("Histórico de Dias"):
     st.session_state["view_mode"] = "Historico"
     st.rerun()
+if st.sidebar.button("👥 Colaboradores Cadastrados"):
+    st.session_state["view_mode"] = "Colaboradores"
+    st.rerun()
 
+# --- GESTÃO E CADASTRO DE COLABORADORES PELO SUPERVISOR ---
 if st.session_state["user_info"]["role"] == "Supervisor":
     st.sidebar.markdown("---")
     with st.sidebar.expander("Cadastrar Novo Colaborador"):
@@ -131,16 +165,29 @@ if st.session_state["user_info"]["role"] == "Supervisor":
             nn = st.text_input("Nome")
             ne = st.text_input("Email")
             np = st.text_input("Telefone")
-            ns = st.text_input("Senha", type="password")
+            ns = st.text_input("Senha Inicial", type="password")
             nr = st.selectbox("Perfil", ["Operador", "Supervisor"])
             if st.form_submit_button("Guardar"):
                 if nu and ns and nn:
+                    users_db = load_users()
                     users_db[nu] = {"name": nn, "password": ns, "role": nr, "email": ne, "phone": np}
-                    with open(USERS_F, "w", encoding="utf-8") as f:
-                        json.dump(users_db, f, indent=4, ensure_ascii=False)
+                    save_users(users_db)
                     st.sidebar.success("Cadastrado com sucesso!")
                 else:
                     st.sidebar.warning("Preencha os campos obrigatórios.")
+
+    with st.sidebar.expander("🔑 Redefinir Senha de Colaborador"):
+        with st.form("reset_pass_form"):
+            users_db = load_users()
+            sel_user = st.selectbox("Selecione o Utilizador:", options=list(users_db.keys()))
+            nova_senha = st.text_input("Nova Senha:", type="password")
+            if st.form_submit_button("Atualizar Senha"):
+                if nova_senha:
+                    users_db[sel_user]["password"] = nova_senha
+                    save_users(users_db)
+                    st.sidebar.success(f"Senha de '{sel_user}' atualizada com sucesso!")
+                else:
+                    st.sidebar.warning("Introduza a nova senha.")
 
 t_atual = st.session_state["transportadora_ativa"]
 cfg = FILES[t_atual]
@@ -154,7 +201,26 @@ with c_h2:
     st.title(f"RS Logística - {t_atual}")
 st.markdown("---")
 
-if st.session_state["view_mode"] == "Historico":
+if st.session_state["view_mode"] == "Colaboradores":
+    st.subheader("👥 Lista de Colaboradores Cadastrados")
+    users_db = load_users()
+    lista_colab = []
+    for u_key, u_val in users_db.items():
+        lista_colab.append({
+            "Utilizador (Login)": u_key,
+            "Nome Completo": u_val.get("name", ""),
+            "Perfil": u_val.get("role", ""),
+            "Email": u_val.get("email", ""),
+            "Telefone": u_val.get("phone", "")
+        })
+    df_colab = pd.DataFrame(lista_colab)
+    st.dataframe(df_colab, use_container_width=True, hide_index=True)
+    st.markdown("---")
+    if st.button("⬅️ Voltar ao Painel Principal"):
+        st.session_state["view_mode"] = "Painel Principal"
+        st.rerun()
+
+elif st.session_state["view_mode"] == "Historico":
     st.subheader(f"📚 Histórico de Dias - {t_atual}")
     prefixo = cfg["prefix"]
     arquivos = sorted([f for f in os.listdir(DIR_H) if prefixo in f and f.endswith('.xlsx')], reverse=True)
@@ -193,6 +259,7 @@ else:
                     pass_c = st.text_input("Senha Supervisor:", type="password")
                     if st.form_submit_button("Confirmar Fecho"):
                         k = st.session_state.get("username_key", "")
+                        users_db = load_users()
                         if k in users_db and users_db[k]["password"] == pass_c:
                             if os.path.exists(data_file):
                                 dh = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
