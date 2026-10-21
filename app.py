@@ -46,16 +46,9 @@ USERS_F = "users.json"
 
 def load_users():
     default_users = {
-        "admin": {
-            "name": "Supervisor Geral", 
-            "password": "admin", 
-            "role": "Supervisor", 
-            "email": "admin@logistica.com", 
-            "phone": "000000000"
-        },
-        "yuri": {
+        "13894491655": {
             "name": "Yuri Bergamaschine", 
-            "password": "123", 
+            "password": "172550", 
             "role": "Supervisor", 
             "email": "yuri@logistica.com", 
             "phone": "000000000"
@@ -101,7 +94,7 @@ if not st.session_state["logged_in"]:
         
         with tab_login:
             with st.form("login"):
-                u = st.text_input("Utilizador")
+                u = st.text_input("Utilizador (CPF)")
                 p = st.text_input("Senha", type="password")
                 if st.form_submit_button("Entrar"):
                     users_db = load_users()
@@ -115,7 +108,7 @@ if not st.session_state["logged_in"]:
         
         with tab_esqueci:
             st.info("Insira o seu nome de utilizador para consultar a sua senha ou contacte o Supervisor Geral.")
-            u_rec = st.text_input("Utilizador:")
+            u_rec = st.text_input("Utilizador (CPF):")
             if st.button("Consultar Senha"):
                 users_db = load_users()
                 if u_rec in users_db:
@@ -254,4 +247,94 @@ else:
     if st.session_state["user_info"]["role"] == "Supervisor":
         c_up, c_enc = st.columns([3, 1])
         with c_up:
-            up =
+            up = st.file_uploader(f"Carregar Planilha da {t_atual} (.xlsx)", type=["xlsx", "xls"])
+            if up is not None:
+                try:
+                    df_raw = pd.read_excel(up, sheet_name=0)
+                    df_pr = tratar_imile(df_raw) if t_atual == "iMile" else tratar_anjun(df_raw)
+                    df_pr.to_excel(data_file, index=False)
+                    st.success("Planilha carregada com sucesso!")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Erro: {e}")
+        with c_enc:
+            st.write("")
+            with st.expander(f"🔒 Encerrar Dia"):
+                with st.form("form_enc"):
+                    pass_c = st.text_input("Senha Supervisor:", type="password")
+                    if st.form_submit_button("Confirmar Fecho"):
+                        k = st.session_state.get("username_key", "")
+                        users_db = load_users()
+                        if k in users_db and users_db[k]["password"] == pass_c:
+                            if os.path.exists(data_file):
+                                dh = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                                novo_nome = f"{cfg['prefix']}_fechamento_{dh}.xlsx"
+                                os.rename(data_file, os.path.join(DIR_H, novo_nome))
+                                st.success("Dia encerrado e arquivado no histórico com sucesso!")
+                                st.rerun()
+                            else:
+                                st.warning("Não existem dados ativos para encerrar.")
+                        else:
+                            st.error("Senha incorreta.")
+
+    df = None
+    if os.path.exists(data_file):
+        try:
+            df = pd.read_excel(data_file)
+        except:
+            df = None
+    elif os.path.exists("dados_atuais.xlsx"):
+        try:
+            df = pd.read_excel("dados_atuais.xlsx")
+        except:
+            df = None
+
+    if df is not None and not df.empty:
+        if 'Data/Hora Última Leitura' in df.columns:
+            df['Data/Hora Última Leitura'] = pd.to_datetime(df['Data/Hora Última Leitura'], errors='coerce')
+        if 'Hora de Criação' in df.columns:
+            df['Hora de Criação'] = pd.to_datetime(df['Hora de Criação'], errors='coerce')
+
+        cols = ['Número AWB', 'Nome do Motorista', 'Último Status', 'Cidade Destino', 'Data/Hora Última Leitura', 'Hora de Criação']
+        df_disp = df[[c for c in cols if c in df.columns]]
+
+        st.sidebar.markdown("---")
+        st.sidebar.subheader(f"Filtros ({t_atual})")
+
+        if 'Nome do Motorista' in df_disp.columns:
+            mots = sorted(df_disp['Nome do Motorista'].astype(str).unique().tolist())
+            m_s = st.sidebar.multiselect("Nome do Motorista:", options=mots, default=mots, key=f"m_filt_{t_atual}")
+            if m_s:
+                df_disp = df_disp[df_disp['Nome do Motorista'].isin(m_s)]
+
+        if 'Cidade Destino' in df_disp.columns:
+            cids = sorted(df_disp['Cidade Destino'].astype(str).unique().tolist())
+            c_s = st.sidebar.multiselect("Cidade Destino:", options=cids, default=cids, key=f"c_{t_atual}")
+            if c_s:
+                df_disp = df_disp[df_disp['Cidade Destino'].isin(c_s)]
+
+        if 'Último Status' in df_disp.columns:
+            stats = sorted(df_disp['Último Status'].astype(str).unique().tolist())
+            s_s = st.sidebar.multiselect("Último Status:", options=stats, default=stats, key=f"s_{t_atual}")
+            if s_s:
+                df_disp = df_disp[df_disp['Último Status'].isin(s_s)]
+
+        tot = len(df_disp)
+        st_s = df_disp['Último Status'].astype(str).str.lower() if 'Último Status' in df_disp.columns else pd.Series([""] * tot)
+        
+        t_ent = int(st_s.str.contains('entregue', na=False).sum())
+        t_rot = int(st_s.str.contains('rota', na=False).sum())
+        t_out = tot - t_ent - t_rot
+        
+        p_ent = (t_ent / tot * 100) if tot > 0 else 0.0
+        p_rot = (t_rot / tot * 100) if tot > 0 else 0.0
+        p_out = (t_out / tot * 100) if tot > 0 else 0.0
+
+        oct_m = 0.0
+        if 'Hora de Criação' in df.columns and 'Data/Hora Última Leitura' in df.columns:
+            st_orig = df['Último Status'].astype(str).str.lower() if 'Último Status' in df.columns else pd.Series([""] * len(df))
+            df_oct = df[st_orig.str.contains('entregue', na=False) & df['Hora de Criação'].notna() & df['Data/Hora Última Leitura'].notna()]
+            if not df_oct.empty:
+                oct_m = ((df_oct['Data/Hora Última Leitura'] - df_oct['Hora de Criação']).dt.total_seconds() / 86400.0).mean()
+
+        if st.session_state["view_mode"] == "Painel
