@@ -106,12 +106,12 @@ if not st.session_state["logged_in"]:
                         st.error("Utilizador ou senha incorretos.")
         
         with tab_esqueci:
-            st.info("Insira o seu nome de utilizador para consultar a sua senha ou contacte o Supervisor Geral.")
+            st.info("Insira o seu CPF para consultar a sua senha.")
             u_rec = st.text_input("Utilizador (CPF):")
             if st.button("Consultar Senha"):
                 users_db = load_users()
                 if u_rec in users_db:
-                    st.success(f"A senha para o utilizador **{u_rec}** é: `{users_db[u_rec]['password']}`")
+                    st.success(f"A senha é: `{users_db[u_rec]['password']}`")
                 else:
                     st.warning("Utilizador não encontrado.")
     st.stop()
@@ -188,7 +188,7 @@ if st.session_state["user_info"]["role"] == "Supervisor":
                 if nova_senha:
                     users_db[sel_user]["password"] = nova_senha
                     save_users(users_db)
-                    st.sidebar.success(f"Senha de '{sel_user}' atualizada!")
+                    st.sidebar.success("Senha atualizada!")
                 else:
                     st.sidebar.warning("Introduza a nova senha.")
 
@@ -204,7 +204,9 @@ with c_h2:
     st.title(f"RS Logística - {t_atual}")
 st.markdown("---")
 
-if st.session_state["view_mode"] == "Colaboradores":
+modo = st.session_state["view_mode"]
+
+if modo == "Colaboradores":
     st.subheader("👥 Lista de Colaboradores Cadastrados")
     users_db = load_users()
     lista_colab = []
@@ -223,7 +225,7 @@ if st.session_state["view_mode"] == "Colaboradores":
         st.session_state["view_mode"] = "Painel Principal"
         st.rerun()
 
-elif st.session_state["view_mode"] == "Historico":
+elif modo == "Historico":
     st.subheader(f"📚 Histórico de Dias - {t_atual}")
     prefixo = cfg["prefix"]
     arquivos = sorted([f for f in os.listdir(DIR_H) if prefixo in f and f.endswith('.xlsx')], reverse=True)
@@ -235,58 +237,20 @@ elif st.session_state["view_mode"] == "Historico":
             st.success(f"Ficheiro: {sel} | Total de Registos: {len(df_h)}")
             st.dataframe(df_h, use_container_width=True, hide_index=True)
     else:
-        st.info(f"Nenhum histórico guardado para **{t_atual}**. Utilize o botão '🔒 Encerrar Dia' no painel principal para arquivar os dados atuais.")
+        st.info(f"Nenhum histórico guardado para **{t_atual}**.")
     
     st.markdown("---")
     if st.button("⬅️ Voltar ao Painel Principal"):
         st.session_state["view_mode"] = "Painel Principal"
         st.rerun()
-else:
-    if st.session_state["user_info"]["role"] == "Supervisor":
-        c_up, c_enc = st.columns([3, 1])
-        with c_up:
-            up = st.file_uploader(f"Carregar Planilha da {t_atual} (.xlsx)", type=["xlsx", "xls"])
-            if up is not None:
-                try:
-                    df_raw = pd.read_excel(up, sheet_name=0)
-                    df_pr = tratar_imile(df_raw) if t_atual == "iMile" else tratar_anjun(df_raw)
-                    df_pr.to_excel(data_file, index=False)
-                    st.success("Planilha carregada com sucesso!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Erro: {e}")
-        with c_enc:
-            st.write("")
-            with st.expander("🔒 Encerrar Dia"):
-                with st.form("form_enc"):
-                    pass_c = st.text_input("Senha Supervisor:", type="password")
-                    if st.form_submit_button("Confirmar Fecho"):
-                        k = st.session_state.get("username_key", "")
-                        users_db = load_users()
-                        if k in users_db and users_db[k]["password"] == pass_c:
-                            if os.path.exists(data_file):
-                                dh = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                                novo_nome = f"{cfg['prefix']}_fechamento_{dh}.xlsx"
-                                os.rename(data_file, os.path.join(DIR_H, novo_nome))
-                                st.success("Dia encerrado e arquivado no histórico com sucesso!")
-                                st.rerun()
-                            else:
-                                st.warning("Não existem dados ativos para encerrar.")
-                        else:
-                            st.error("Senha incorreta.")
 
+elif modo == "Painel Motoristas":
+    st.subheader(f"Painel por Motorista - {t_atual}")
     df = None
     if os.path.exists(data_file):
-        try:
-            df = pd.read_excel(data_file)
-        except:
-            df = None
-    elif os.path.exists("dados_atuais.xlsx"):
-        try:
-            df = pd.read_excel("dados_atuais.xlsx")
-        except:
-            df = None
-
+        try: df = pd.read_excel(data_file)
+        except: df = None
+    
     if df is not None and not df.empty:
         if 'Data/Hora Última Leitura' in df.columns:
             df['Data/Hora Última Leitura'] = pd.to_datetime(df['Data/Hora Última Leitura'], errors='coerce')
@@ -296,32 +260,13 @@ else:
         cols = ['Número AWB', 'Nome do Motorista', 'Último Status', 'Cidade Destino', 'Data/Hora Última Leitura', 'Hora de Criação']
         df_disp = df[[c for c in cols if c in df.columns]]
 
-        st.sidebar.markdown("---")
-        st.sidebar.subheader(f"Filtros ({t_atual})")
+        bm = st.text_input("🔍 Procurar Motorista:", placeholder="Ex: Rodrigo")
+        st.markdown("---")
 
-        if 'Nome do Motorista' in df_disp.columns:
-            mots = sorted(df_disp['Nome do Motorista'].astype(str).unique().tolist())
-            m_s = st.sidebar.multiselect("Nome do Motorista:", options=mots, default=mots, key=f"m_filt_{t_atual}")
-            if m_s:
-                df_disp = df_disp[df_disp['Nome do Motorista'].isin(m_s)]
+        df_m_all = df_disp[df_disp['Nome do Motorista'] != 'Sem Motorista']
+        if bm:
+            df_m_all = df_m_all[df_m_all['Nome do Motorista'].astype(str).str.contains(bm, case=False, na=False)]
 
-        if 'Cidade Destino' in df_disp.columns:
-            cids = sorted(df_disp['Cidade Destino'].astype(str).unique().tolist())
-            c_s = st.sidebar.multiselect("Cidade Destino:", options=cids, default=cids, key=f"c_{t_atual}")
-            if c_s:
-                df_disp = df_disp[df_disp['Cidade Destino'].isin(c_s)]
-
-        if 'Último Status' in df_disp.columns:
-            stats = sorted(df_disp['Último Status'].astype(str).unique().tolist())
-            s_s = st.sidebar.multiselect("Último Status:", options=stats, default=stats, key=f"s_{t_atual}")
-            if s_s:
-                df_disp = df_disp[df_disp['Último Status'].isin(s_s)]
-
-        tot = len(df_disp)
-        st_s = df_disp['Último Status'].astype(str).str.lower() if 'Último Status' in df_disp.columns else pd.Series([""] * tot)
-        
-        t_ent = int(st_s.str.contains('entregue', na=False).sum())
-        t_rot = int(st_s.str.contains('rota', na=False).sum())
-        t_out = tot - t_ent - t_rot
-        
-        p_ent = (t_ent / tot * 100) if tot > 0 else 0
+        l_m = sorted(df_m_all['Nome do Motorista'].unique().tolist())
+        if l_m:
+            for i in range(0, len(l_m), 3):
