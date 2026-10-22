@@ -32,7 +32,7 @@ if not st.session_state["logged_in"]:
         if u in db and db[u]["password"] == p:
             st.session_state["logged_in"] = True
             st.session_state["user_info"] = db[u]
-            st.success("Login efetuado com sucesso! Atualize a página.")
+            st.rerun()
         else:
             st.error("Dados incorretos.")
     st.stop()
