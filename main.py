@@ -101,6 +101,25 @@ if st.sidebar.button("Sair"):
     st.session_state["user_info"] = None
     st.rerun()
 
+t_atual = st.session_state["transportadora_ativa"]
+cfg = FILES[t_atual]
+data_file = cfg["data"]
+
+# --- CARREGAR PLANILHA DIRETAMENTE NA BARRA LATERAL PARA O SUPERVISOR ---
+if st.session_state["user_info"]["role"] == "Supervisor":
+    st.sidebar.markdown("---")
+    st.sidebar.subheader(f"📁 Carregar Dados ({t_atual})")
+    up = st.sidebar.file_uploader(f"Planilha .xlsx", type=["xlsx", "xls"], key=f"up_{t_atual}")
+    if up is not None:
+        try:
+            df_r = pd.read_excel(up, sheet_name=0)
+            df_p = tratar_imile(df_r) if t_atual == "iMile" else tratar_anjun(df_r)
+            df_p.to_excel(data_file, index=False)
+            st.sidebar.success("Carregado com sucesso!")
+            st.rerun()
+        except Exception as e:
+			st.sidebar.error(f"Erro: {e}")
+
 st.sidebar.markdown("---")
 st.sidebar.subheader("Transportadoras")
 cl1, cl2 = st.sidebar.columns(2)
@@ -154,10 +173,6 @@ if st.session_state["user_info"]["role"] == "Supervisor":
                     st.sidebar.success("Atualizado!")
                 else:
                     st.sidebar.warning("Insira a senha.")
-
-t_atual = st.session_state["transportadora_ativa"]
-cfg = FILES[t_atual]
-data_file = cfg["data"]
 
 c1, c2 = st.columns([1, 8])
 with c1:
@@ -224,38 +239,6 @@ elif modo == "Motoristas":
     if st.button("Voltar"): st.session_state["view_mode"] = "Principal"; st.rerun()
 
 else:
-    if st.session_state["user_info"]["role"] == "Supervisor":
-        cup, cenc = st.columns([3, 1])
-        with cup:
-            up = st.file_uploader(f"Carregar Planilha da {t_atual} (.xlsx)", type=["xlsx", "xls"])
-            if up is not None:
-                try:
-                    df_r = pd.read_excel(up, sheet_name=0)
-                    df_p = tratar_imile(df_r) if t_atual == "iMile" else tratar_anjun(df_r)
-                    df_p.to_excel(data_file, index=False)
-                    st.success("Carregado com sucesso!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"Erro: {e}")
-        with cenc:
-            st.write("")
-            with st.expander("Encerrar Dia"):
-                with st.form("f_enc"):
-                    pc = st.text_input("Digite a Senha do Supervisor:", type="password")
-                    if st.form_submit_button("Confirmar Fecho"):
-                        k = st.session_state.get("username_key", "")
-                        db = load_users()
-                        if k in db and db[k]["password"] == pc:
-                            if os.path.exists(data_file):
-                                dh = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-                                os.rename(data_file, os.path.join(DIR_H, f"{cfg['prefix']}_fechamento_{dh}.xlsx"))
-                                st.success("Dia encerrado e arquivado com sucesso!")
-                                st.rerun()
-                            else:
-                                st.warning("Sem dados ativos para encerrar.")
-                        else:
-                            st.error("Senha incorreta.")
-
     df = pd.read_excel(data_file) if os.path.exists(data_file) else None
     if df is not None and not df.empty:
         if 'Data/Hora Última Leitura' in df.columns: df['Data/Hora Última Leitura'] = pd.to_datetime(df['Data/Hora Última Leitura'], errors='coerce')
@@ -274,56 +257,4 @@ else:
             cids = sorted(df_disp['Cidade Destino'].astype(str).unique().tolist())
             cs = st.sidebar.multiselect("Cidade:", options=cids, default=cids, key=f"c_{t_atual}")
             if cs: df_disp = df_disp[df_disp['Cidade Destino'].isin(cs)]
-        if 'Último Status' in df_disp.columns:
-            stats = sorted(df_disp['Último Status'].astype(str).unique().tolist())
-            ss = st.sidebar.multiselect("Status:", options=stats, default=stats, key=f"s_{t_atual}")
-            if ss: df_disp = df_disp[df_disp['Último Status'].isin(ss)]
-
-        tot = len(df_disp)
-        st_s = df_disp['Último Status'].astype(str).str.lower() if 'Último Status' in df_disp.columns else pd.Series([""] * tot)
-        t_ent = int(st_s.str.contains('entregue', na=False).sum())
-        t_rot = int(st_s.str.contains('rota', na=False).sum())
-        t_out = tot - t_ent - t_rot
-        p_ent = (t_ent / tot * 100) if tot > 0 else 0.0
-        p_rot = (t_rot / tot * 100) if tot > 0 else 0.0
-        p_out = (t_out / tot * 100) if tot > 0 else 0.0
-
-        oct_m = 0.0
-        if 'Hora de Criação' in df.columns and 'Data/Hora Última Leitura' in df.columns:
-            st_orig = df['Último Status'].astype(str).str.lower() if 'Último Status' in df.columns else pd.Series([""] * len(df))
-            df_oct = df[st_orig.str.contains('entregue', na=False) & df['Hora de Criação'].notna() & df['Data/Hora Última Leitura'].notna()]
-            if not df_oct.empty:
-                oct_m = ((df_oct['Data/Hora Última Leitura'] - df_oct['Hora de Criação']).dt.total_seconds() / 86400.0).mean()
-
-        if tot > 0:
-            st.subheader(f"Progresso - {t_atual}")
-            st.progress(float(p_ent / 100.0))
-            st.write(f"Entregue: {p_ent:.1f}% | Em rota: {p_rot:.1f}% | Outros: {p_out:.1f}%")
-            st.caption(f"Total: {tot} | Entregues: {t_ent} | Em Rota: {t_rot} | Outros: {t_out}")
-            st.markdown("---")
-
-        c1, c2, c3, c4, c5, c6, c7 = st.columns(7)
-        c1.metric("Total", tot)
-        c2.metric("Motoristas", df_disp[df_disp['Nome do Motorista'] != 'Sem Motorista']['Nome do Motorista'].nunique())
-        c3.metric("Entregues", t_ent)
-        c4.metric("Em Rota", t_rot)
-        c5.metric("SLA", f"{p_ent:.1f}%")
-        c6.metric("OTIF", f"{p_ent:.1f}%")
-        c7.metric("OCT", f"{oct_m:.1f} dias")
-        
-        st.markdown("---")
-        st.subheader("Pesquisa AWB")
-        bg = st.text_input("AWB:", key=f"srch_{t_atual}")
-        if bg:
-            df_res = df_disp[df_disp['Número AWB'].astype(str).str.contains(bg, case=False, na=False)]
-            if not df_res.empty:
-                st.success(f"{len(df_res)} encontrado(s):")
-                st.dataframe(df_res, use_container_width=True, hide_index=True)
-            else:
-                st.warning("Não encontrado.")
-            st.markdown("---")
-
-        st.subheader(f"Tabela - {t_atual}")
-        st.dataframe(df_disp, use_container_width=True, hide_index=True)
-    else:
-        st.info(f"Aguardando carregamento da planilha da **{t_atual}**.")
+        if 'Último Status
