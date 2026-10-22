@@ -20,100 +20,64 @@ def tratar_imile(df_r):
     df = df_r.copy()
     df.columns = df.columns.str.strip()
     
-    if 'Numero da Etiqueta' in df.columns:
-        df['Numero AWB'] = df['Numero da Etiqueta'].astype(str)
-    elif 'Waybill No' in df.columns:
-        df['Numero AWB'] = df['Waybill No'].astype(str)
-    else:
-        df['Numero AWB'] = 'Nao'
+    # AWB dinâmico
+    awb_col = 'Nao'
+    for col in df.columns:
+        c = col.lower()
+        if 'etiqueta' in c or 'waybill' in c or 'awb' in c:
+            awb_col = col
+            break
+    df['Numero AWB'] = df[awb_col].astype(str) if awb_col != 'Nao' else 'Nao'
         
-    if 'Motorista' in df.columns:
-        df['Nome do Motorista'] = df['Motorista'].fillna('Sem Motorista')
-    elif 'Driver Name' in df.columns:
-        df['Nome do Motorista'] = df['Driver Name'].fillna('Sem Motorista')
-    else:
-        df['Nome do Motorista'] = 'Sem Motorista'
+    # Motorista dinâmico
+    mot_col = 'Sem Motorista'
+    for col in df.columns:
+        c = col.lower()
+        if 'motorista' in c or 'driver' in c or 'entregador' in c:
+            mot_col = col
+            break
+    df['Nome do Motorista'] = df[mot_col].fillna('Sem Motorista') if mot_col != 'Sem Motorista' else 'Sem Motorista'
         
-    if 'Ultimo status' in df.columns:
-        df['Ultimo Status'] = df['Ultimo status'].fillna('Nao')
-    elif 'Last scan type' in df.columns:
-        df['Ultimo Status'] = df['Last scan type'].fillna('Nao')
-    else:
-        df['Ultimo Status'] = 'Nao'
+    # Status dinâmico
+    stat_col = 'Nao'
+    for col in df.columns:
+        c = col.lower()
+        if 'status' in c or 'scan type' in c or 'estado' in c:
+            stat_col = col
+            break
+    df['Ultimo Status'] = df[stat_col].fillna('Nao') if stat_col != 'Nao' else 'Nao'
         
-    if 'Cidade destinataria' in df.columns:
-        df['Cidade Destino'] = df['Cidade destinataria'].fillna('Nao')
-    elif 'Destination City' in df.columns:
-        df['Cidade Destino'] = df['Destination City'].fillna('Nao')
-    else:
-        df['Cidade Destino'] = 'Nao'
+    # Cidade dinâmica
+    cid_col = 'Nao'
+    for col in df.columns:
+        c = col.lower()
+        if 'cidade' in c or 'destination' in c:
+            cid_col = col
+            break
+    df['Cidade Destino'] = df[cid_col].fillna('Nao') if cid_col != 'Nao' else 'Nao'
         
-    h_leitura = 'Horario da ultima leitura' if 'Horario da ultima leitura' in df.columns else ('Last scan time' if 'Last scan time' in df.columns else None)
-    if h_leitura:
-        df['Data/Hora Ultima Leitura'] = pd.to_datetime(df[h_leitura], errors='coerce')
-    else:
-        df['Data/Hora Ultima Leitura'] = pd.NaT
+    # Data/Hora Última Leitura dinâmica
+    h_leitura = None
+    for col in df.columns:
+        c = col.lower()
+        if 'horário' in c or 'horario' in c or 'time' in c or 'leitura' in c or 'rastreio' in c:
+            h_leitura = col
+            break
+    df['Data/Hora Ultima Leitura'] = pd.to_datetime(df[h_leitura], errors='coerce') if h_leitura else pd.NaT
         
-    if 'Hora de Criacao' in df.columns:
-        df['Hora de Criacao'] = pd.to_datetime(df['Hora de Criacao'], errors='coerce')
-    else:
-        df['Hora de Criacao'] = pd.NaT
+    # Hora de Criação dinâmica
+    h_criacao = None
+    for col in df.columns:
+        c = col.lower()
+        if 'criação' in c or 'criacao' in c or 'creation' in c or 'tempo' in c:
+            h_criacao = col
+            break
+    df['Hora de Criacao'] = pd.to_datetime(df[h_criacao], errors='coerce') if h_criacao else pd.NaT
         
     return df
 
 def tratar_anjun(df_r):
-    df = df_r.copy()
-    df.columns = df.columns.str.strip()
-    
-    if 'Numero do Waybill' in df.columns:
-        df['Numero AWB'] = df['Numero do Waybill'].astype(str)
-    elif 'AWB' in df.columns:
-        df['Numero AWB'] = df['AWB'].astype(str)
-    elif 'Waybill No' in df.columns:
-        df['Numero AWB'] = df['Waybill No'].astype(str)
-    else:
-        df['Numero AWB'] = 'Nao'
-        
-    if 'Entregador' in df.columns:
-        df['Nome do Motorista'] = df['Entregador'].fillna('Sem Motorista')
-    elif 'Motorista' in df.columns:
-        df['Nome do Motorista'] = df['Motorista'].fillna('Sem Motorista')
-    elif 'Driver Name' in df.columns:
-        df['Nome do Motorista'] = df['Driver Name'].fillna('Sem Motorista')
-    else:
-        df['Nome do Motorista'] = 'Sem Motorista'
-        
-    if 'Status do Pacote' in df.columns:
-        df['Ultimo Status'] = df['Status do Pacote'].fillna('Nao')
-    elif 'Status' in df.columns:
-        df['Ultimo Status'] = df['Status'].fillna('Nao')
-    elif 'Ultimo status' in df.columns:
-        df['Ultimo Status'] = df['Ultimo status'].fillna('Nao')
-    else:
-        df['Ultimo Status'] = 'Nao'
-        
-    if 'Cidade do destinatario' in df.columns:
-        df['Cidade Destino'] = df['Cidade do destinatario'].fillna('Nao')
-    elif 'Cidade' in df.columns:
-        df['Cidade Destino'] = df['Cidade'].fillna('Nao')
-    elif 'Cidade destinataria' in df.columns:
-        df['Cidade Destino'] = df['Cidade destinataria'].fillna('Nao')
-    else:
-        df['Cidade Destino'] = 'Nao'
-        
-    d_leitura = 'Ultimo data de rastreio' if 'Ultimo data de rastreio' in df.columns else ('Data Ultima Leitura' if 'Data Ultima Leitura' in df.columns else ('Horario da ultima leitura' if 'Horario da ultima leitura' in df.columns else None))
-    if d_leitura:
-        df['Data/Hora Ultima Leitura'] = pd.to_datetime(df[d_leitura], errors='coerce')
-    else:
-        df['Data/Hora Ultima Leitura'] = pd.NaT
-        
-    d_criacao = 'Tempo de Criacao' if 'Tempo de Criacao' in df.columns else ('Data Criacao' if 'Data Criacao' in df.columns else ('Hora de Criacao' if 'Hora de Criacao' in df.columns else None))
-    if d_criacao:
-        df['Hora de Criacao'] = pd.to_datetime(df[d_criacao], errors='coerce')
-    else:
-        df['Hora de Criacao'] = pd.NaT
-        
-    return df
+    return tratar_imile(df_r)
 
 USERS_F = "users.json"
 def load_users():
@@ -193,7 +157,7 @@ if st.session_state["user_info"]["role"] == "Supervisor":
     if up is not None:
         try:
             df_r = pd.read_excel(up, sheet_name=0)
-            df_p = tratar_imile(df_r) if t_atual == "iMile" else tratar_anjun(df_r)
+            df_p = tratar_imile(df_r)
             df_p.to_excel(data_file, index=False)
             st.sidebar.success("Carregado com sucesso!")
             st.rerun()
@@ -238,37 +202,6 @@ if st.sidebar.button("Principal"): st.session_state["view_mode"] = "Principal"; 
 if st.sidebar.button("Motoristas"): st.session_state["view_mode"] = "Motoristas"; st.rerun()
 if st.sidebar.button("Historico"): st.session_state["view_mode"] = "Historico"; st.rerun()
 if st.sidebar.button("Colaboradores"): st.session_state["view_mode"] = "Colaboradores"; st.rerun()
-
-if st.session_state["user_info"]["role"] == "Supervisor":
-    st.sidebar.markdown("---")
-    with st.sidebar.expander("Novo Colaborador"):
-        with st.form("f_new"):
-            nu = st.text_input("Login")
-            nn = st.text_input("Nome")
-            ne = st.text_input("Email")
-            np = st.text_input("Telefone")
-            ns = st.text_input("Senha", type="password")
-            nr = st.selectbox("Perfil", ["Operador", "Supervisor"])
-            if st.form_submit_button("Guardar"):
-                if nu and ns and nn:
-                    db = load_users()
-                    db[nu] = {"name": nn, "password": ns, "role": nr, "email": ne, "phone": np}
-                    save_users(db)
-                    st.sidebar.success("Guardado!")
-                else:
-                    st.sidebar.warning("Preencha os obrigatorios.")
-    with st.sidebar.expander("Redefinir Senha"):
-        with st.form("f_reset"):
-            db = load_users()
-            su = st.selectbox("Utilizador:", options=list(db.keys()))
-            npw = st.text_input("Nova Senha:", type="password")
-            if st.form_submit_button("Atualizar"):
-                if npw:
-                    db[su]["password"] = npw
-                    save_users(db)
-                    st.sidebar.success("Atualizado!")
-                else:
-                    st.sidebar.warning("Insira a senha.")
 
 modo = st.session_state["view_mode"]
 st.title(f"RS Logistica - {t_atual}")
@@ -330,11 +263,6 @@ elif modo == "Motoristas":
 else:
     df = pd.read_excel(data_file) if os.path.exists(data_file) else None
     if df is not None and not df.empty:
-        if 'Data/Hora Ultima Leitura' in df.columns:
-            df['Data/Hora Ultima Leitura'] = pd.to_datetime(df['Data/Hora Ultima Leitura'], errors='coerce')
-        if 'Hora de Criacao' in df.columns:
-            df['Hora de Criacao'] = pd.to_datetime(df['Hora de Criacao'], errors='coerce')
-
         cols = ['Numero AWB', 'Nome do Motorista', 'Ultimo Status', 'Cidade Destino', 'Data/Hora Ultima Leitura', 'Hora de Criacao']
         df_disp = df[[c for c in cols if c in df.columns]]
 
