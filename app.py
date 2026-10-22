@@ -5,10 +5,11 @@ import json
 import os
 from datetime import datetime
 
-st.set_page_config(page_title="RS Logística", page_icon="🚚", layout="wide")
+st.set_page_config(page_title="RS Logistica", page_icon="🚚", layout="wide")
 
 DIR_H = "historico_diario"
-if not os.path.exists(DIR_H): os.makedirs(DIR_H)
+if not os.path.exists(DIR_H):
+    os.makedirs(DIR_H)
 
 FILES = {
     "iMile": {"data": "dados_imile.xlsx", "prefix": "imile", "logo": "logo_imile.png"},
@@ -18,42 +19,45 @@ FILES = {
 def tratar_imile(df_r):
     df = df_r.copy()
     df.columns = df.columns.str.strip()
-    df['Número AWB'] = df['Número da Etiqueta'].astype(str) if 'Número da Etiqueta' in df.columns else df.get('Waybill No', 'Nao').astype(str)
+    df['Numero AWB'] = df['Numero da Etiqueta'].astype(str) if 'Numero da Etiqueta' in df.columns else df.get('Waybill No', 'Nao').astype(str)
     df['Nome do Motorista'] = df.get('Motorista', df.get('Driver Name', 'Sem Motorista')).fillna('Sem Motorista')
-    df['Último Status'] = df.get('Último status', df.get('Last scan type', 'Nao')).fillna('Nao')
-    df['Cidade Destino'] = df.get('Cidade destinatária', df.get('Destination City', 'Nao')).fillna('Nao')
-    df['Data/Hora Última Leitura'] = pd.to_datetime(df.get('Horário da última leitura', df.get('Last scan time')), errors='coerce')
-    df['Hora de Criação'] = pd.to_datetime(df.get('Hora de Criação'), errors='coerce')
+    df['Ultimo Status'] = df.get('Ultimo status', df.get('Last scan type', 'Nao')).fillna('Nao')
+    df['Cidade Destino'] = df.get('Cidade destinataria', df.get('Destination City', 'Nao')).fillna('Nao')
+    df['Data/Hora Ultima Leitura'] = pd.to_datetime(df.get('Horario da ultima leitura', df.get('Last scan time')), errors='coerce')
+    df['Hora de Criacao'] = pd.to_datetime(df.get('Hora de Criacao'), errors='coerce')
     return df
 
 def tratar_anjun(df_r):
     df = df_r.copy()
     df.columns = df.columns.str.strip()
-    df['Número AWB'] = df.get('Número do Waybill', df.get('AWB', df.get('Waybill No', 'Nao'))).astype(str)
+    df['Numero AWB'] = df.get('Numero do Waybill', df.get('AWB', df.get('Waybill No', 'Nao'))).astype(str)
     df['Nome do Motorista'] = df.get('Entregador', df.get('Motorista', df.get('Driver Name', 'Sem Motorista'))).fillna('Sem Motorista')
-    df['Último Status'] = df.get('Status do Pacote', df.get('Status', df.get('Último status', 'Nao'))).fillna('Nao')
-    df['Cidade Destino'] = df.get('Cidade do destinatário', df.get('Cidade', df.get('Cidade destinatária', 'Nao'))).fillna('Nao')
-    df['Data/Hora Última Leitura'] = pd.to_datetime(df.get('Último data de rastreio', df.get('Data Última Leitura', df.get('Horário da última leitura'))), errors='coerce')
-    df['Hora de Criação'] = pd.to_datetime(df.get('Tempo de Criação', df.get('Data Criação', df.get('Hora de Criação'))), errors='coerce')
+    df['Ultimo Status'] = df.get('Status do Pacote', df.get('Status', df.get('Ultimo status', 'Nao'))).fillna('Nao')
+    df['Cidade Destino'] = df.get('Cidade do destinatario', df.get('Cidade', df.get('Cidade destinataria', 'Nao'))).fillna('Nao')
+    df['Data/Hora Ultima Leitura'] = pd.to_datetime(df.get('Ultimo data de rastreio', df.get('Data Ultima Leitura', df.get('Horario da ultima leitura'))), errors='coerce')
+    df['Hora de Criacao'] = pd.to_datetime(df.get('Tempo de Criacao', df.get('Data Criacao', df.get('Hora de Criacao'))), errors='coerce')
     return df
 
 USERS_F = "users.json"
 def load_users():
     def_u = {"13894491655": {"name": "Yuri Bergamaschine", "password": "172550", "role": "Supervisor", "email": "yuri@logistica.com", "phone": "0"}}
     if not os.path.exists(USERS_F):
-        with open(USERS_F, "w", encoding="utf-8") as f: json.dump(def_u, f, indent=4, ensure_ascii=False)
+        with open(USERS_F, "w", encoding="utf-8") as f:
+            json.dump(def_u, f, indent=4, ensure_ascii=False)
         return def_u
     try:
         with open(USERS_F, "r", encoding="utf-8") as f:
             d = json.load(f)
             for k, v in def_u.items():
-                if k not in d: d[k] = v
+                if k not in d:
+                    d[k] = v
             return d
     except:
         return def_u
 
 def save_users(u):
-    with open(USERS_F, "w", encoding="utf-8") as f: json.dump(u, f, indent=4, ensure_ascii=False)
+    with open(USERS_F, "w", encoding="utf-8") as f:
+        json.dump(u, f, indent=4, ensure_ascii=False)
 
 if "logged_in" not in st.session_state:
     st.session_state["logged_in"] = False
@@ -64,7 +68,7 @@ if "view_mode" not in st.session_state:
     st.session_state["view_mode"] = "Principal"
 
 if not st.session_state["logged_in"]:
-    st.title("RS Logística - Portal de Operações")
+    st.title("RS Logistica - Portal de Operacoes")
     st.markdown("---")
     _, c_mid, _ = st.columns([1, 2, 1])
     with c_mid:
@@ -87,8 +91,10 @@ if not st.session_state["logged_in"]:
             ur = st.text_input("CPF:")
             if st.button("Consultar"):
                 db = load_users()
-                if ur in db: st.success(f"Senha: {db[ur]['password']}")
-                else: st.warning("Não encontrado.")
+                if ur in db:
+                    st.success(f"Senha: {db[ur]['password']}")
+                else:
+                    st.warning("Nao encontrado.")
     st.stop()
 
 st.sidebar.title(f"Utilizador: {st.session_state['user_info']['name']}")
@@ -150,10 +156,10 @@ with cl2:
         st.rerun()
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("Navegação")
+st.sidebar.subheader("Navegacao")
 if st.sidebar.button("Principal"): st.session_state["view_mode"] = "Principal"; st.rerun()
 if st.sidebar.button("Motoristas"): st.session_state["view_mode"] = "Motoristas"; st.rerun()
-if st.sidebar.button("Histórico"): st.session_state["view_mode"] = "Historico"; st.rerun()
+if st.sidebar.button("Historico"): st.session_state["view_mode"] = "Historico"; st.rerun()
 if st.sidebar.button("Colaboradores"): st.session_state["view_mode"] = "Colaboradores"; st.rerun()
 
 if st.session_state["user_info"]["role"] == "Supervisor":
@@ -173,7 +179,7 @@ if st.session_state["user_info"]["role"] == "Supervisor":
                     save_users(db)
                     st.sidebar.success("Guardado!")
                 else:
-                    st.sidebar.warning("Preencha os obrigatórios.")
+                    st.sidebar.warning("Preencha os obrigatorios.")
     with st.sidebar.expander("Redefinir Senha"):
         with st.form("f_reset"):
             db = load_users()
@@ -188,7 +194,7 @@ if st.session_state["user_info"]["role"] == "Supervisor":
                     st.sidebar.warning("Insira a senha.")
 
 modo = st.session_state["view_mode"]
-st.title(f"RS Logística - {t_atual}")
+st.title(f"RS Logistica - {t_atual}")
 st.markdown("---")
 
 if modo == "Colaboradores":
@@ -198,7 +204,7 @@ if modo == "Colaboradores":
     st.dataframe(pd.DataFrame(lst), use_container_width=True, hide_index=True)
 
 elif modo == "Historico":
-    st.subheader(f"Histórico - {t_atual}")
+    st.subheader(f"Historico - {t_atual}")
     pfx = cfg["prefix"]
     arq = sorted([f for f in os.listdir(DIR_H) if pfx in f and f.endswith('.xlsx')], reverse=True)
     if arq:
@@ -208,7 +214,7 @@ elif modo == "Historico":
             st.success(f"Registos: {len(df_h)}")
             st.dataframe(df_h, use_container_width=True, hide_index=True)
     else:
-        st.info("Sem histórico.")
+        st.info("Sem historico.")
 
 elif modo == "Motoristas":
     st.subheader(f"Motoristas - {t_atual}")
@@ -217,7 +223,8 @@ elif modo == "Motoristas":
         bm = st.text_input("Procurar Motorista:")
         st.markdown("---")
         df_m = df[df['Nome do Motorista'] != 'Sem Motorista']
-        if bm: df_m = df_m[df_m['Nome do Motorista'].astype(str).str.contains(bm, case=False, na=False)]
+        if bm:
+            df_m = df_m[df_m['Nome do Motorista'].astype(str).str.contains(bm, case=False, na=False)]
         mots = sorted(df_m['Nome do Motorista'].unique().tolist())
         if mots:
             for i in range(0, len(mots), 3):
@@ -226,7 +233,7 @@ elif modo == "Motoristas":
                     if i + j < len(mots):
                         m = mots[i+j]
                         df_mot = df_m[df_m['Nome do Motorista'] == m]
-                        st_m = df_mot['Último Status'].astype(str).str.lower()
+                        st_m = df_mot['Ultimo Status'].astype(str).str.lower()
                         me = int(st_m.str.contains('entregue', na=False).sum())
                         mr = int(st_m.str.contains('rota', na=False).sum())
                         mo = len(df_mot) - me - mr
@@ -246,5 +253,77 @@ elif modo == "Motoristas":
 else:
     df = pd.read_excel(data_file) if os.path.exists(data_file) else None
     if df is not None and not df.empty:
-        if 'Data/Hora Última Leitura' in df.columns: df['Data/Hora Última Leitura'] = pd.to_datetime(df['Data/Hora Última Leitura'], errors='coerce')
-        if 'Hora de Criação' in df.columns: df['Hora de Criação'] = pd.to_datetime(df['Hora de Criação'], errors='coerce
+        if 'Data/Hora Ultima Leitura' in df.columns:
+            df['Data/Hora Ultima Leitura'] = pd.to_datetime(df['Data/Hora Ultima Leitura'], errors='coerce')
+        if 'Hora de Criacao' in df.columns:
+            df['Hora de Criacao'] = pd.to_datetime(df['Hora de Criacao'], errors='coerce')
+
+        cols = ['Numero AWB', 'Nome do Motorista', 'Ultimo Status', 'Cidade Destino', 'Data/Hora Ultima Leitura', 'Hora de Criacao']
+        df_disp = df[[c for c in cols if c in df.columns]]
+
+        st.sidebar.markdown("---")
+        st.sidebar.subheader("Filtros")
+        if 'Nome do Motorista' in df_disp.columns:
+            mots = sorted(df_disp['Nome do Motorista'].astype(str).unique().tolist())
+            ms = st.sidebar.multiselect("Motorista:", options=mots, default=mots, key=f"m_{t_atual}")
+            if ms:
+                df_disp = df_disp[df_disp['Nome do Motorista'].isin(ms)]
+        if 'Cidade Destino' in df_disp.columns:
+            cids = sorted(df_disp['Cidade Destino'].astype(str).unique().tolist())
+            cs = st.sidebar.multiselect("Cidade:", options=cids, default=cids, key=f"c_{t_atual}")
+            if cs:
+                df_disp = df_disp[df_disp['Cidade Destino'].isin(cs)]
+        if 'Ultimo Status' in df_disp.columns:
+            stats = sorted(df_disp['Ultimo Status'].astype(str).unique().tolist())
+            ss = st.sidebar.multiselect("Status:", options=stats, default=stats, key=f"s_{t_atual}")
+            if ss:
+                df_disp = df_disp[df_disp['Ultimo Status'].isin(ss)]
+
+        tot = len(df_disp)
+        st_s = df_disp['Ultimo Status'].astype(str).str.lower() if 'Ultimo Status' in df_disp.columns else pd.Series([""] * tot)
+        t_ent = int(st_s.str.contains('entregue', na=False).sum())
+        t_rot = int(st_s.str.contains('rota', na=False).sum())
+        t_out = tot - t_ent - t_rot
+        p_ent = (t_ent / tot * 100) if tot > 0 else 0.0
+        p_rot = (t_rot / tot * 100) if tot > 0 else 0.0
+        p_out = (t_out / tot * 100) if tot > 0 else 0.0
+
+        oct_m = 0.0
+        if 'Hora de Criacao' in df.columns and 'Data/Hora Ultima Leitura' in df.columns:
+            st_orig = df['Ultimo Status'].astype(str).str.lower() if 'Ultimo Status' in df.columns else pd.Series([""] * len(df))
+            df_oct = df[st_orig.str.contains('entregue', na=False) & df['Hora de Criacao'].notna() & df['Data/Hora Ultima Leitura'].notna()]
+            if not df_oct.empty:
+                oct_m = ((df_oct['Data/Hora Ultima Leitura'] - df_oct['Hora de Criacao']).dt.total_seconds() / 86400.0).mean()
+
+        if tot > 0:
+            st.subheader("Progresso Geral")
+            st.progress(float(p_ent / 100.0))
+            st.write(f"Entregue: {p_ent:.1f}% | Em rota: {p_rot:.1f}% | Outros: {p_out:.1f}%")
+            st.caption(f"Total: {tot} | Entregues: {t_ent} | Em Rota: {t_rot} | Outros: {t_out}")
+            st.markdown("---")
+
+        c1, c2, c3, c4, c5, c6, c7 = st.columns(7)
+        c1.metric("Total", tot)
+        c2.metric("Motoristas", df_disp[df_disp['Nome do Motorista'] != 'Sem Motorista']['Nome do Motorista'].nunique())
+        c3.metric("Entregues", t_ent)
+        c4.metric("Em Rota", t_rot)
+        c5.metric("SLA", f"{p_ent:.1f}%")
+        c6.metric("OTIF", f"{p_ent:.1f}%")
+        c7.metric("OCT", f"{oct_m:.1f} dias")
+
+        st.markdown("---")
+        st.subheader("Pesquisa AWB")
+        bg = st.text_input("AWB:", key=f"srch_{t_atual}")
+        if bg:
+            df_res = df_disp[df_disp['Número AWB'].astype(str).str.contains(bg, case=False, na=False)]
+            if not df_res.empty:
+                st.success(f"{len(df_res)} encontrado(s):")
+                st.dataframe(df_res, use_container_width=True, hide_index=True)
+            else:
+                st.warning("Nao encontrado.")
+            st.markdown("---")
+
+        st.subheader("Tabela de Dados")
+        st.dataframe(df_disp, use_container_width=True, hide_index=True)
+    else:
+        st.info(f"Aguardando carregamento da planilha da **{t_atual}** na barra lateral.")
