@@ -19,23 +19,100 @@ FILES = {
 def tratar_imile(df_r):
     df = df_r.copy()
     df.columns = df.columns.str.strip()
-    df['Numero AWB'] = df['Numero da Etiqueta'].astype(str) if 'Numero da Etiqueta' in df.columns else df.get('Waybill No', 'Nao').astype(str)
-    df['Nome do Motorista'] = df.get('Motorista', df.get('Driver Name', 'Sem Motorista')).fillna('Sem Motorista')
-    df['Ultimo Status'] = df.get('Ultimo status', df.get('Last scan type', 'Nao')).fillna('Nao')
-    df['Cidade Destino'] = df.get('Cidade destinataria', df.get('Destination City', 'Nao')).fillna('Nao')
-    df['Data/Hora Ultima Leitura'] = pd.to_datetime(df.get('Horario da ultima leitura', df.get('Last scan time')), errors='coerce')
-    df['Hora de Criacao'] = pd.to_datetime(df.get('Hora de Criacao'), errors='coerce')
+    
+    if 'Numero da Etiqueta' in df.columns:
+        df['Numero AWB'] = df['Numero da Etiqueta'].astype(str)
+    elif 'Waybill No' in df.columns:
+        df['Numero AWB'] = df['Waybill No'].astype(str)
+    else:
+        df['Numero AWB'] = 'Nao'
+        
+    if 'Motorista' in df.columns:
+        df['Nome do Motorista'] = df['Motorista'].fillna('Sem Motorista')
+    elif 'Driver Name' in df.columns:
+        df['Nome do Motorista'] = df['Driver Name'].fillna('Sem Motorista')
+    else:
+        df['Nome do Motorista'] = 'Sem Motorista'
+        
+    if 'Ultimo status' in df.columns:
+        df['Ultimo Status'] = df['Ultimo status'].fillna('Nao')
+    elif 'Last scan type' in df.columns:
+        df['Ultimo Status'] = df['Last scan type'].fillna('Nao')
+    else:
+        df['Ultimo Status'] = 'Nao'
+        
+    if 'Cidade destinataria' in df.columns:
+        df['Cidade Destino'] = df['Cidade destinataria'].fillna('Nao')
+    elif 'Destination City' in df.columns:
+        df['Cidade Destino'] = df['Destination City'].fillna('Nao')
+    else:
+        df['Cidade Destino'] = 'Nao'
+        
+    h_leitura = 'Horario da ultima leitura' if 'Horario da ultima leitura' in df.columns else ('Last scan time' if 'Last scan time' in df.columns else None)
+    if h_leitura:
+        df['Data/Hora Ultima Leitura'] = pd.to_datetime(df[h_leitura], errors='coerce')
+    else:
+        df['Data/Hora Ultima Leitura'] = pd.NaT
+        
+    if 'Hora de Criacao' in df.columns:
+        df['Hora de Criacao'] = pd.to_datetime(df['Hora de Criacao'], errors='coerce')
+    else:
+        df['Hora de Criacao'] = pd.NaT
+        
     return df
 
 def tratar_anjun(df_r):
     df = df_r.copy()
     df.columns = df.columns.str.strip()
-    df['Numero AWB'] = df.get('Numero do Waybill', df.get('AWB', df.get('Waybill No', 'Nao'))).astype(str)
-    df['Nome do Motorista'] = df.get('Entregador', df.get('Motorista', df.get('Driver Name', 'Sem Motorista'))).fillna('Sem Motorista')
-    df['Ultimo Status'] = df.get('Status do Pacote', df.get('Status', df.get('Ultimo status', 'Nao'))).fillna('Nao')
-    df['Cidade Destino'] = df.get('Cidade do destinatario', df.get('Cidade', df.get('Cidade destinataria', 'Nao'))).fillna('Nao')
-    df['Data/Hora Ultima Leitura'] = pd.to_datetime(df.get('Ultimo data de rastreio', df.get('Data Ultima Leitura', df.get('Horario da ultima leitura'))), errors='coerce')
-    df['Hora de Criacao'] = pd.to_datetime(df.get('Tempo de Criacao', df.get('Data Criacao', df.get('Hora de Criacao'))), errors='coerce')
+    
+    if 'Numero do Waybill' in df.columns:
+        df['Numero AWB'] = df['Numero do Waybill'].astype(str)
+    elif 'AWB' in df.columns:
+        df['Numero AWB'] = df['AWB'].astype(str)
+    elif 'Waybill No' in df.columns:
+        df['Numero AWB'] = df['Waybill No'].astype(str)
+    else:
+        df['Numero AWB'] = 'Nao'
+        
+    if 'Entregador' in df.columns:
+        df['Nome do Motorista'] = df['Entregador'].fillna('Sem Motorista')
+    elif 'Motorista' in df.columns:
+        df['Nome do Motorista'] = df['Motorista'].fillna('Sem Motorista')
+    elif 'Driver Name' in df.columns:
+        df['Nome do Motorista'] = df['Driver Name'].fillna('Sem Motorista')
+    else:
+        df['Nome do Motorista'] = 'Sem Motorista'
+        
+    if 'Status do Pacote' in df.columns:
+        df['Ultimo Status'] = df['Status do Pacote'].fillna('Nao')
+    elif 'Status' in df.columns:
+        df['Ultimo Status'] = df['Status'].fillna('Nao')
+    elif 'Ultimo status' in df.columns:
+        df['Ultimo Status'] = df['Ultimo status'].fillna('Nao')
+    else:
+        df['Ultimo Status'] = 'Nao'
+        
+    if 'Cidade do destinatario' in df.columns:
+        df['Cidade Destino'] = df['Cidade do destinatario'].fillna('Nao')
+    elif 'Cidade' in df.columns:
+        df['Cidade Destino'] = df['Cidade'].fillna('Nao')
+    elif 'Cidade destinataria' in df.columns:
+        df['Cidade Destino'] = df['Cidade destinataria'].fillna('Nao')
+    else:
+        df['Cidade Destino'] = 'Nao'
+        
+    d_leitura = 'Ultimo data de rastreio' if 'Ultimo data de rastreio' in df.columns else ('Data Ultima Leitura' if 'Data Ultima Leitura' in df.columns else ('Horario da ultima leitura' if 'Horario da ultima leitura' in df.columns else None))
+    if d_leitura:
+        df['Data/Hora Ultima Leitura'] = pd.to_datetime(df[d_leitura], errors='coerce')
+    else:
+        df['Data/Hora Ultima Leitura'] = pd.NaT
+        
+    d_criacao = 'Tempo de Criacao' if 'Tempo de Criacao' in df.columns else ('Data Criacao' if 'Data Criacao' in df.columns else ('Hora de Criacao' if 'Hora de Criacao' in df.columns else None))
+    if d_criacao:
+        df['Hora de Criacao'] = pd.to_datetime(df[d_criacao], errors='coerce')
+    else:
+        df['Hora de Criacao'] = pd.NaT
+        
     return df
 
 USERS_F = "users.json"
@@ -315,10 +392,10 @@ else:
         st.subheader("Pesquisa AWB")
         bg = st.text_input("AWB:", key=f"srch_{t_atual}")
         if bg:
-            df_res = df_disp[df_disp['Número AWB'].astype(str).str.contains(bg, case=False, na=False)]
+            df_res = df_disp[df_disp['Numero AWB'].astype(str).str.contains(bg, case=False, na=False)]
             if not df_res.empty:
                 st.success(f"{len(df_res)} encontrado(s):")
-                st.dataframe(df_res, use_container_width=True, hide_index=True)
+                st.dataframe(df_res, use_container_width=True, hide_index=True)     
             else:
                 st.warning("Nao encontrado.")
             st.markdown("---")
