@@ -105,7 +105,7 @@ t_atual = st.session_state["transportadora_ativa"]
 cfg = FILES[t_atual]
 data_file = cfg["data"]
 
-# --- CARREGAR PLANILHA DIRETAMENTE NA BARRA LATERAL PARA O SUPERVISOR ---
+# --- BARRA LATERAL DO SUPERVISOR (UPLOAD DE DADOS E FECHO DE DIA) ---
 if st.session_state["user_info"]["role"] == "Supervisor":
     st.sidebar.markdown("---")
     st.sidebar.subheader(f"📁 Carregar Dados ({t_atual})")
@@ -118,7 +118,25 @@ if st.session_state["user_info"]["role"] == "Supervisor":
             st.sidebar.success("Carregado com sucesso!")
             st.rerun()
         except Exception as e:
-			st.sidebar.error(f"Erro: {e}")
+            st.sidebar.error(f"Erro: {e}")
+
+    st.sidebar.markdown("---")
+    with st.sidebar.expander("🔒 Encerrar Dia"):
+        with st.form("f_enc"):
+            pc = st.text_input("Senha do Supervisor:", type="password")
+            if st.form_submit_button("Confirmar Fecho"):
+                k = st.session_state.get("username_key", "")
+                db = load_users()
+                if k in db and db[k]["password"] == pc:
+                    if os.path.exists(data_file):
+                        dh = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+                        os.rename(data_file, os.path.join(DIR_H, f"{cfg['prefix']}_fechamento_{dh}.xlsx"))
+                        st.sidebar.success("Dia encerrado com sucesso!")
+                        st.rerun()
+                    else:
+                        st.sidebar.warning("Sem dados para encerrar.")
+                else:
+                    st.sidebar.error("Senha incorreta.")
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("Transportadoras")
