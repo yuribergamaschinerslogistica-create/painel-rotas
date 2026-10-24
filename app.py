@@ -29,22 +29,9 @@ def tratar_imile(df_r):
             break
     df['Numero AWB'] = df[awb_col].astype(str) if awb_col != 'Nao' else 'Nao'
         
-    # Motorista: Procura exata pelas colunas "Motorista" ou "MOTORISTA"
-    mot_col = 'Sem Motorista'
-    for col in df.columns:
-        if col.upper() == 'MOTORISTA':
-            mot_col = col
-            break
-    # Se não achar exatamente "Motorista", procura por colunas que contenham a palavra isolada
-    if mot_col == 'Sem Motorista':
-        for col in df.columns:
-            c = col.lower()
-            if c == 'motorista' or c == 'driver name' or c == 'entregador':
-                mot_col = col
-                break
-    
-    if mot_col != 'Sem Motorista':
-        df['Nome do Motorista'] = df[mot_col].fillna('Sem Motorista').astype(str)
+    # Motorista: busca exata pela coluna 'Motorista'
+    if 'Motorista' in df.columns:
+        df['Nome do Motorista'] = df['Motorista'].fillna('Sem Motorista').astype(str)
     else:
         df['Nome do Motorista'] = 'Sem Motorista'
         
@@ -289,10 +276,10 @@ else:
             if cs:
                 df_disp = df_disp[df_disp['Cidade Destino'].isin(cs)]
         if 'Ultimo Status' in df_disp.columns:
-            stats = sorted(df_disp['Ultimo Status'].astype(str).unique().tolist())
+            stats = sorted(df_disp['Ultimo Status'].astype(str).str.lower().unique().tolist())
             ss = st.sidebar.multiselect("Status:", options=stats, default=stats, key=f"s_{t_atual}")
             if ss:
-                df_disp = df_disp[df_disp['Ultimo Status'].isin(ss)]
+                df_disp = df_disp[df_disp['Ultimo Status'].astype(str).str.lower().isin(ss)]
 
         tot = len(df_disp)
         st_s = df_disp['Ultimo Status'].astype(str).str.lower() if 'Ultimo Status' in df_disp.columns else pd.Series([""] * tot)
