@@ -20,7 +20,6 @@ def tratar_imile(df_r):
     df = df_r.copy()
     df.columns = df.columns.str.strip()
     
-    # AWB dinâmico
     awb_col = 'Nao'
     for col in df.columns:
         c = col.lower()
@@ -29,13 +28,11 @@ def tratar_imile(df_r):
             break
     df['Numero AWB'] = df[awb_col].astype(str) if awb_col != 'Nao' else 'Nao'
         
-    # Motorista: busca exata pela coluna 'Motorista'
     if 'Motorista' in df.columns:
         df['Nome do Motorista'] = df['Motorista'].fillna('Sem Motorista').astype(str)
     else:
         df['Nome do Motorista'] = 'Sem Motorista'
         
-    # Status dinâmico
     stat_col = 'Nao'
     for col in df.columns:
         c = col.lower()
@@ -44,7 +41,6 @@ def tratar_imile(df_r):
             break
     df['Ultimo Status'] = df[stat_col].fillna('Nao') if stat_col != 'Nao' else 'Nao'
         
-    # Cidade dinâmica
     cid_col = 'Nao'
     for col in df.columns:
         c = col.lower()
@@ -53,7 +49,6 @@ def tratar_imile(df_r):
             break
     df['Cidade Destino'] = df[cid_col].fillna('Nao') if cid_col != 'Nao' else 'Nao'
         
-    # Data/Hora Última Leitura dinâmica
     h_leitura = None
     for col in df.columns:
         c = col.lower()
@@ -62,7 +57,6 @@ def tratar_imile(df_r):
             break
     df['Data/Hora Ultima Leitura'] = pd.to_datetime(df[h_leitura], errors='coerce') if h_leitura else pd.NaT
         
-    # Hora de Criação dinâmica
     h_criacao = None
     for col in df.columns:
         c = col.lower()
@@ -263,24 +257,6 @@ else:
         cols = ['Numero AWB', 'Nome do Motorista', 'Ultimo Status', 'Cidade Destino', 'Data/Hora Ultima Leitura', 'Hora de Criacao']
         df_disp = df[[c for c in cols if c in df.columns]]
 
-        st.sidebar.markdown("---")
-        st.sidebar.subheader("Filtros")
-        if 'Nome do Motorista' in df_disp.columns:
-            mots = sorted(df_disp['Nome do Motorista'].astype(str).unique().tolist())
-            ms = st.sidebar.multiselect("Motorista:", options=mots, default=mots, key=f"m_{t_atual}")
-            if ms:
-                df_disp = df_disp[df_disp['Nome do Motorista'].isin(ms)]
-        if 'Cidade Destino' in df_disp.columns:
-            cids = sorted(df_disp['Cidade Destino'].astype(str).unique().tolist())
-            cs = st.sidebar.multiselect("Cidade:", options=cids, default=cids, key=f"c_{t_atual}")
-            if cs:
-                df_disp = df_disp[df_disp['Cidade Destino'].isin(cs)]
-        if 'Ultimo Status' in df_disp.columns:
-            stats = sorted(df_disp['Ultimo Status'].astype(str).str.lower().unique().tolist())
-            ss = st.sidebar.multiselect("Status:", options=stats, default=stats, key=f"s_{t_atual}")
-            if ss:
-                df_disp = df_disp[df_disp['Ultimo Status'].astype(str).str.lower().isin(ss)]
-
         tot = len(df_disp)
         st_s = df_disp['Ultimo Status'].astype(str).str.lower() if 'Ultimo Status' in df_disp.columns else pd.Series([""] * tot)
         t_ent = int(st_s.str.contains('entregue', na=False).sum())
@@ -325,6 +301,32 @@ else:
                 st.warning("Nao encontrado.")
             st.markdown("---")
 
+        # Filtros principais posicionados na área principal (onde indicou na imagem)
+        st.subheader("Filtros de Tabela")
+        f_col1, f_col2, f_col3 = st.columns(3)
+        
+        with f_col1:
+            if 'Nome do Motorista' in df_disp.columns:
+                mots = sorted(df_disp['Nome do Motorista'].astype(str).unique().tolist())
+                ms = st.multiselect("Filtrar por Motorista:", options=mots, default=mots, key=f"m_{t_atual}")
+                if ms:
+                    df_disp = df_disp[df_disp['Nome do Motorista'].isin(ms)]
+                    
+        with f_col2:
+            if 'Ultimo Status' in df_disp.columns:
+                stats = sorted(df_disp['Ultimo Status'].astype(str).unique().tolist())
+                ss = st.multiselect("Filtrar por Status:", options=stats, default=stats, key=f"s_{t_atual}")
+                if ss:
+                    df_disp = df_disp[df_disp['Ultimo Status'].isin(ss)]
+                    
+        with f_col3:
+            if 'Cidade Destino' in df_disp.columns:
+                cids = sorted(df_disp['Cidade Destino'].astype(str).unique().tolist())
+                cs = st.multiselect("Filtrar por Cidade:", options=cids, default=cids, key=f"c_{t_atual}")
+                if cs:
+                    df_disp = df_disp[df_disp['Cidade Destino'].isin(cs)]
+
+        st.markdown("---")
         st.subheader("Tabela de Dados")
         st.dataframe(df_disp, use_container_width=True, hide_index=True)
     else:
