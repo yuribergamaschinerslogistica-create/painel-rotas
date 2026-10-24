@@ -5,18 +5,19 @@ import json
 import os
 from datetime import datetime
 
-st.set_page_config(page_title="RS Logística | Enterprise", page_icon="🚚", layout="wide", initial_sidebar_state="expanded")
+st.set_page_config(page_title="RS Logística | Enterprise Dark", page_icon="🚚", layout="wide", initial_sidebar_state="expanded")
 
-# --- ESTILIZAÇÃO CSS PROFISSIONAL ---
+# --- ESTILIZAÇÃO CSS TEMA ESCURO PROFISSIONAL ---
 st.markdown("""
     <style>
-    .main { background-color: #f8f9fa; }
+    .main { background-color: #0e1117; color: #ffffff; }
+    [data-testid="stSidebar"] { background-color: #161b22; }
     .metric-card {
-        background-color: #ffffff;
-        border: 1px solid #e3e6f0;
+        background-color: #21262d;
+        border: 1px solid #30363d;
         border-radius: 8px;
         padding: 16px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+        box-shadow: 0 4px 6px rgba(0,0,0,0.3);
         margin-bottom: 10px;
     }
     .stButton>button {
@@ -119,8 +120,8 @@ if "view_mode" not in st.session_state:
     st.session_state["view_mode"] = "Principal"
 
 if not st.session_state["logged_in"]:
-    st.markdown("<h2 style='text-align: center; color: #1f2937;'>RS Logística - Enterprise Portal</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; color: #6b7280;'>Sistema de Gestão e Monitoramento Operacional</p>", unsafe_allow_html=True)
+    st.markdown("<h2 style='text-align: center; color: #f3f4f6;'>RS Logística - Enterprise Portal</h2>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: #9ca3af;'>Sistema de Gestão e Monitoramento Operacional</p>", unsafe_allow_html=True)
     st.markdown("---")
     _, c_mid, _ = st.columns([1, 1.2, 1])
     with c_mid:
@@ -265,7 +266,7 @@ elif modo == "Motoristas":
                                 st.markdown(f"**{m}**")
                                 fig = px.pie(pd.DataFrame({'S': ['Entregue', 'Rota', 'Outros'], 'Q': [me, mr, mo]}), names='S', values='Q', hole=0.6, color='S', color_discrete_map={'Entregue': '#10b981', 'Rota': '#f59e0b', 'Outros': '#ef4444'})
                                 fig.update_traces(textinfo='value', showlegend=False)
-                                fig.update_layout(margin=dict(t=5, b=5, l=5, r=5), height=150, paper_bgcolor='rgba(0,0,0,0)')
+                                fig.update_layout(margin=dict(t=5, b=5, l=5, r=5), height=150, paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', font_color='white')
                                 st.plotly_chart(fig, use_container_width=True, key=f"pie_{t_atual}_{i+j}")
                                 st.caption(f"Entregues: {me} | Rota: {mr} | Outros: {mo}")
         else:
@@ -322,7 +323,6 @@ else:
                 st.warning("Nenhum AWB correspondente encontrado.")
             st.markdown("---")
 
-        # Filtros principais na área superior da tabela
         st.subheader("⚙️ Filtros Operacionais")
         f_col1, f_col2, f_col3 = st.columns(3)
         
