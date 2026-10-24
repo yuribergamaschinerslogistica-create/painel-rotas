@@ -5,15 +5,34 @@ import json
 import os
 from datetime import datetime
 
-st.set_page_config(page_title="RS Logistica", page_icon="🚚", layout="wide")
+st.set_page_config(page_title="RS Logística | Enterprise", page_icon="🚚", layout="wide", initial_sidebar_state="expanded")
+
+# --- ESTILIZAÇÃO CSS PROFISSIONAL ---
+st.markdown("""
+    <style>
+    .main { background-color: #f8f9fa; }
+    .metric-card {
+        background-color: #ffffff;
+        border: 1px solid #e3e6f0;
+        border-radius: 8px;
+        padding: 16px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+        margin-bottom: 10px;
+    }
+    .stButton>button {
+        border-radius: 6px;
+        font-weight: 500;
+    }
+    </style>
+""", unsafe_allow_html=True)
 
 DIR_H = "historico_diario"
 if not os.path.exists(DIR_H):
     os.makedirs(DIR_H)
 
 FILES = {
-    "iMile": {"data": "dados_imile.xlsx", "prefix": "imile", "logo": "logo_imile.png"},
-    "Anjun": {"data": "dados_anjun.xlsx", "prefix": "anjun", "logo": "logo_anjun.png"}
+    "iMile": {"data": "dados_imile.xlsx", "prefix": "imile"},
+    "Anjun": {"data": "dados_anjun.xlsx", "prefix": "anjun"}
 }
 
 def tratar_imile(df_r):
@@ -100,42 +119,59 @@ if "view_mode" not in st.session_state:
     st.session_state["view_mode"] = "Principal"
 
 if not st.session_state["logged_in"]:
-    st.title("RS Logistica - Portal de Operacoes")
+    st.markdown("<h2 style='text-align: center; color: #1f2937;'>RS Logística - Enterprise Portal</h2>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: #6b7280;'>Sistema de Gestão e Monitoramento Operacional</p>", unsafe_allow_html=True)
     st.markdown("---")
-    _, c_mid, _ = st.columns([1, 2, 1])
+    _, c_mid, _ = st.columns([1, 1.2, 1])
     with c_mid:
-        t_l, t_e = st.tabs(["Entrar", "Esqueci a Senha"])
-        with t_l:
-            with st.form("f_log"):
-                u = st.text_input("CPF")
-                p = st.text_input("Senha", type="password")
-                if st.form_submit_button("Entrar"):
+        with st.container(border=True):
+            t_l, t_e = st.tabs(["🔐 Entrar", "🔑 Recuperar Senha"])
+            with t_l:
+                with st.form("f_log"):
+                    u = st.text_input("CPF do Colaborador")
+                    p = st.text_input("Senha de Acesso", type="password")
+                    st.markdown("")
+                    if st.form_submit_button("Acessar Sistema", use_container_width=True):
+                        db = load_users()
+                        if u in db and db[u]["password"] == p:
+                            st.session_state["logged_in"] = True
+                            st.session_state["username_key"] = u
+                            st.session_state["user_info"] = db[u]
+                            st.rerun()
+                        else:
+                            st.error("Credenciais inválidas.")
+            with t_e:
+                ur = st.text_input("Informe seu CPF:")
+                if st.button("Consultar Senha", use_container_width=True):
                     db = load_users()
-                    if u in db and db[u]["password"] == p:
-                        st.session_state["logged_in"] = True
-                        st.session_state["username_key"] = u
-                        st.session_state["user_info"] = db[u]
-                        st.rerun()
+                    if ur in db:
+                        st.success(f"Senha cadastrada: {db[ur]['password']}")
                     else:
-                        st.error("Dados incorretos.")
-        with t_e:
-            st.info("Insira o seu CPF para consultar a senha.")
-            ur = st.text_input("CPF:")
-            if st.button("Consultar"):
-                db = load_users()
-                if ur in db:
-                    st.success(f"Senha: {db[ur]['password']}")
-                else:
-                    st.warning("Nao encontrado.")
+                        st.warning("CPF não localizado.")
     st.stop()
 
-st.sidebar.title(f"Utilizador: {st.session_state['user_info']['name']}")
-st.sidebar.caption(f"Perfil: {st.session_state['user_info']['role']}")
+# --- BARRA LATERAL PROFISSIONAL ---
+with st.sidebar:
+    st.markdown(f"### 👤 {st.session_state['user_info']['name']}")
+    st.caption(f"Cargo: **{st.session_state['user_info']['role']}**")
+    if st.button("Encerrar Sessão", use_container_width=True):
+        st.session_state["logged_in"] = False
+        st.session_state["user_info"] = None
+        st.rerun()
 
-if st.sidebar.button("Sair"):
-    st.session_state["logged_in"] = False
-    st.session_state["user_info"] = None
-    st.rerun()
+    st.markdown("---")
+    st.subheader("🏢 Transportadoras")
+    col_t1, col_t2 = st.columns(2)
+    with col_t1:
+        if st.button("iMile", use_container_width=True, type="primary" if st.session_state["transportadora_ativa"] == "iMile" else "secondary"):
+            st.session_state["transportadora_ativa"] = "iMile"
+            st.session_state["view_mode"] = "Principal"
+            st.rerun()
+    with col_t2:
+        if st.button("Anjun", use_container_width=True, type="primary" if st.session_state["transportadora_ativa"] == "Anjun" else "secondary"):
+            st.session_state["transportadora_ativa"] = "Anjun"
+            st.session_state["view_mode"] = "Principal"
+            st.rerun()
 
 t_atual = st.session_state["transportadora_ativa"]
 cfg = FILES[t_atual]
@@ -143,85 +179,71 @@ data_file = cfg["data"]
 
 if st.session_state["user_info"]["role"] == "Supervisor":
     st.sidebar.markdown("---")
-    st.sidebar.subheader(f"📁 Carregar Dados ({t_atual})")
-    up = st.sidebar.file_uploader("Ficheiro .xlsx", type=["xlsx", "xls"], key=f"up_{t_atual}")
+    st.sidebar.subheader(f"📥 Ingestão ({t_atual})")
+    up = st.sidebar.file_uploader("Carregar Base .xlsx", type=["xlsx", "xls"], key=f"up_{t_atual}")
     if up is not None:
         try:
             df_r = pd.read_excel(up, sheet_name=0)
             df_p = tratar_imile(df_r)
             df_p.to_excel(data_file, index=False)
-            st.sidebar.success("Carregado com sucesso!")
+            st.sidebar.success("Dados atualizados com sucesso!")
             st.rerun()
         except Exception as e:
-            st.sidebar.error(f"Erro: {e}")
+            st.sidebar.error(f"Erro no processamento: {e}")
 
     st.sidebar.markdown("---")
-    with st.sidebar.expander("🔒 Encerrar Dia"):
+    with st.sidebar.expander("🔒 Fechamento Diário"):
         with st.form("f_enc"):
-            pc = st.text_input("Senha do Supervisor:", type="password")
-            if st.form_submit_button("Confirmar Fecho"):
+            pc = st.text_input("Senha do Supervisor", type="password")
+            if st.form_submit_button("Confirmar Fechamento", use_container_width=True):
                 k = st.session_state.get("username_key", "")
                 db = load_users()
                 if k in db and db[k]["password"] == pc:
                     if os.path.exists(data_file):
                         dh = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
                         os.rename(data_file, os.path.join(DIR_H, f"{cfg['prefix']}_fechamento_{dh}.xlsx"))
-                        st.sidebar.success("Dia encerrado e arquivado com sucesso!")
+                        st.sidebar.success("Dia encerrado e arquivado com segurança!")
                         st.rerun()
                     else:
-                        st.sidebar.warning("Sem dados ativos para encerrar.")
+                        st.sidebar.warning("Nenhum dado ativo para encerrar.")
                 else:
                     st.sidebar.error("Senha incorreta.")
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("Transportadoras")
-cl1, cl2 = st.sidebar.columns(2)
-with cl1:
-    if st.button("iMile", use_container_width=True):
-        st.session_state["transportadora_ativa"] = "iMile"
-        st.session_state["view_mode"] = "Principal"
-        st.rerun()
-with cl2:
-    if st.button("Anjun", use_container_width=True):
-        st.session_state["transportadora_ativa"] = "Anjun"
-        st.session_state["view_mode"] = "Principal"
-        st.rerun()
-
-st.sidebar.markdown("---")
-st.sidebar.subheader("Navegacao")
-if st.sidebar.button("Principal"): st.session_state["view_mode"] = "Principal"; st.rerun()
-if st.sidebar.button("Motoristas"): st.session_state["view_mode"] = "Motoristas"; st.rerun()
-if st.sidebar.button("Historico"): st.session_state["view_mode"] = "Historico"; st.rerun()
-if st.sidebar.button("Colaboradores"): st.session_state["view_mode"] = "Colaboradores"; st.rerun()
+st.sidebar.subheader("🧭 Navegação")
+if st.sidebar.button("📊 Painel Geral", use_container_width=True): st.session_state["view_mode"] = "Principal"; st.rerun()
+if st.sidebar.button("🚚 Gestão de Motoristas", use_container_width=True): st.session_state["view_mode"] = "Motoristas"; st.rerun()
+if st.sidebar.button("📂 Histórico de Fechamentos", use_container_width=True): st.session_state["view_mode"] = "Historico"; st.rerun()
+if st.sidebar.button("👥 Colaboradores", use_container_width=True): st.session_state["view_mode"] = "Colaboradores"; st.rerun()
 
 modo = st.session_state["view_mode"]
-st.title(f"RS Logistica - {t_atual}")
+st.markdown(f"## Painel Operacional — {t_atual}")
 st.markdown("---")
 
 if modo == "Colaboradores":
-    st.subheader("Colaboradores Cadastrados")
+    st.subheader("Controle de Acessos")
     db = load_users()
-    lst = [{"Login": k, "Nome": v.get("name",""), "Perfil": v.get("role",""), "Email": v.get("email",""), "Telefone": v.get("phone","")} for k, v in db.items()]
+    lst = [{"CPF/Login": k, "Nome": v.get("name",""), "Perfil": v.get("role",""), "E-mail": v.get("email",""), "Telefone": v.get("phone","")} for k, v in db.items()]
     st.dataframe(pd.DataFrame(lst), use_container_width=True, hide_index=True)
 
 elif modo == "Historico":
-    st.subheader(f"Historico - {t_atual}")
+    st.subheader("Repositório de Fechamentos Diários")
     pfx = cfg["prefix"]
     arq = sorted([f for f in os.listdir(DIR_H) if pfx in f and f.endswith('.xlsx')], reverse=True)
     if arq:
-        sel = st.selectbox("Ficheiro:", options=arq)
+        sel = st.selectbox("Selecione o relatório arquivado:", options=arq)
         if sel:
             df_h = pd.read_excel(os.path.join(DIR_H, sel))
-            st.success(f"Registos: {len(df_h)}")
+            st.info(f"Total de registos no arquivo: {len(df_h)}")
             st.dataframe(df_h, use_container_width=True, hide_index=True)
     else:
-        st.info("Sem historico.")
+        st.info("Nenhum histórico arquivado disponível.")
 
 elif modo == "Motoristas":
-    st.subheader(f"Motoristas - {t_atual}")
+    st.subheader("Desempenho por Motorista")
     df = pd.read_excel(data_file) if os.path.exists(data_file) else None
     if df is not None and not df.empty:
-        bm = st.text_input("Procurar Motorista:")
+        bm = st.text_input("🔍 Pesquisar motorista específico:")
         st.markdown("---")
         df_m = df[df['Nome do Motorista'] != 'Sem Motorista']
         if bm:
@@ -241,15 +263,15 @@ elif modo == "Motoristas":
                         with cols[j]:
                             with st.container(border=True):
                                 st.markdown(f"**{m}**")
-                                fig = px.pie(pd.DataFrame({'S': ['Entregue', 'Rota', 'Outros'], 'Q': [me, mr, mo]}), names='S', values='Q', hole=0.6, color='S', color_discrete_map={'Entregue': '#28a745', 'Rota': '#ffc107', 'Outros': '#dc3545'})
+                                fig = px.pie(pd.DataFrame({'S': ['Entregue', 'Rota', 'Outros'], 'Q': [me, mr, mo]}), names='S', values='Q', hole=0.6, color='S', color_discrete_map={'Entregue': '#10b981', 'Rota': '#f59e0b', 'Outros': '#ef4444'})
                                 fig.update_traces(textinfo='value', showlegend=False)
-                                fig.update_layout(margin=dict(t=5, b=5, l=5, r=5), height=160, paper_bgcolor='rgba(0,0,0,0)')
+                                fig.update_layout(margin=dict(t=5, b=5, l=5, r=5), height=150, paper_bgcolor='rgba(0,0,0,0)')
                                 st.plotly_chart(fig, use_container_width=True, key=f"pie_{t_atual}_{i+j}")
-                                st.write(f"Entregues: {me} | Rota: {mr} | Outros: {mo}")
+                                st.caption(f"Entregues: {me} | Rota: {mr} | Outros: {mo}")
         else:
-            st.info("Nenhum motorista.")
+            st.info("Nenhum motorista localizado.")
     else:
-        st.info("Sem dados.")
+        st.info("Aguardando base de dados ativa.")
 
 else:
     df = pd.read_excel(data_file) if os.path.exists(data_file) else None
@@ -274,35 +296,34 @@ else:
                 oct_m = ((df_oct['Data/Hora Ultima Leitura'] - df_oct['Hora de Criacao']).dt.total_seconds() / 86400.0).mean()
 
         if tot > 0:
-            st.subheader("Progresso Geral")
+            st.markdown("#### Progresso Geral da Operação")
             st.progress(float(p_ent / 100.0))
-            st.write(f"Entregue: {p_ent:.1f}% | Em rota: {p_rot:.1f}% | Outros: {p_out:.1f}%")
-            st.caption(f"Total: {tot} | Entregues: {t_ent} | Em Rota: {t_rot} | Outros: {t_out}")
+            st.write(f"**Entregue:** {p_ent:.1f}% | **Em Rota:** {p_rot:.1f}% | **Outros:** {p_out:.1f}%")
             st.markdown("---")
 
         c1, c2, c3, c4, c5, c6, c7 = st.columns(7)
-        c1.metric("Total", tot)
+        c1.metric("Total", f"{tot:,}")
         c2.metric("Motoristas", df_disp[df_disp['Nome do Motorista'] != 'Sem Motorista']['Nome do Motorista'].nunique())
-        c3.metric("Entregues", t_ent)
-        c4.metric("Em Rota", t_rot)
+        c3.metric("Entregues", f"{t_ent:,}")
+        c4.metric("Em Rota", f"{t_rot:,}")
         c5.metric("SLA", f"{p_ent:.1f}%")
         c6.metric("OTIF", f"{p_ent:.1f}%")
         c7.metric("OCT", f"{oct_m:.1f} dias")
 
         st.markdown("---")
-        st.subheader("Pesquisa AWB")
-        bg = st.text_input("AWB:", key=f"srch_{t_atual}")
+        st.subheader("🔍 Localizador de AWB")
+        bg = st.text_input("Digite ou cole o número do AWB:", key=f"srch_{t_atual}")
         if bg:
             df_res = df_disp[df_disp['Numero AWB'].astype(str).str.contains(bg, case=False, na=False)]
             if not df_res.empty:
-                st.success(f"{len(df_res)} encontrado(s):")
+                st.success(f"{len(df_res)} registo(s) encontrado(s):")
                 st.dataframe(df_res, use_container_width=True, hide_index=True)     
             else:
-                st.warning("Nao encontrado.")
+                st.warning("Nenhum AWB correspondente encontrado.")
             st.markdown("---")
 
-        # Filtros principais posicionados na área principal (onde indicou na imagem)
-        st.subheader("Filtros de Tabela")
+        # Filtros principais na área superior da tabela
+        st.subheader("⚙️ Filtros Operacionais")
         f_col1, f_col2, f_col3 = st.columns(3)
         
         with f_col1:
@@ -327,7 +348,7 @@ else:
                     df_disp = df_disp[df_disp['Cidade Destino'].isin(cs)]
 
         st.markdown("---")
-        st.subheader("Tabela de Dados")
+        st.subheader("📋 Tabela de Dados Analíticos")
         st.dataframe(df_disp, use_container_width=True, hide_index=True)
     else:
-        st.info(f"Aguardando carregamento da planilha da **{t_atual}** na barra lateral.")
+        st.info(f"Aguardando o carregamento da planilha da **{t_atual}** na barra lateral para iniciar a exibição.")
