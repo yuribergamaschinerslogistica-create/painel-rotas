@@ -29,19 +29,24 @@ def tratar_imile(df_r):
             break
     df['Numero AWB'] = df[awb_col].astype(str) if awb_col != 'Nao' else 'Nao'
         
-    # Motorista: prioriza exatamente a coluna "MOTORISTA" (case insensitive) ou colunas equivalentes
+    # Motorista: Procura exata pelas colunas "Motorista" ou "MOTORISTA"
     mot_col = 'Sem Motorista'
     for col in df.columns:
         if col.upper() == 'MOTORISTA':
             mot_col = col
             break
+    # Se não achar exatamente "Motorista", procura por colunas que contenham a palavra isolada
     if mot_col == 'Sem Motorista':
         for col in df.columns:
             c = col.lower()
-            if 'motorista' in c or 'driver' in c or 'entregador' in c:
+            if c == 'motorista' or c == 'driver name' or c == 'entregador':
                 mot_col = col
                 break
-    df['Nome do Motorista'] = df[mot_col].fillna('Sem Motorista') if mot_col != 'Sem Motorista' else 'Sem Motorista'
+    
+    if mot_col != 'Sem Motorista':
+        df['Nome do Motorista'] = df[mot_col].fillna('Sem Motorista').astype(str)
+    else:
+        df['Nome do Motorista'] = 'Sem Motorista'
         
     # Status dinâmico
     stat_col = 'Nao'
